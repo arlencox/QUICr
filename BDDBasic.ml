@@ -1,26 +1,3 @@
-(* TODO:
-  There is a fundamentally wrong construction made in this file.
-
-  The join, widening, meet, and le operations can add new symbols that
-  represent constants.  Because of this, every constant has a BDD node
-  associated with it.  This is a mistake because set constraints don't allow
-  constants in them.  Constants have to be constrained externally.  When trying
-  to convert the BDD back into constraints, when a constraint involved a
-  constant, what should be done?  The only general answer is to introduce a
-  fresh external symbol, but the API does not have this functionality and
-  should not.
-
-  There is another problem to with external symbols.  ForAll constraints have
-  bound variables and these bound variables are not saved in the domain, thus
-  to convert to constraints requires generating fresh bound variables (which
-  are also external).  To get around this problem requires that the bound
-  variable be saved with the constant, but as long as constants can exist that
-  weren't explicitly introduced externally, this cannot be done.  Interally
-  added constants would not have a bound variable associated.
-
-*)
-
-
 module Make
     (S : Interface.Sym)
     (C : Interface.Constant with type sym = S.t)
@@ -44,6 +21,7 @@ module Make
     | `Cardinal of num_cnstr
     | `ForAll of sym * sym * C.cnstr
     | `And of cnstr * cnstr
+    | `True
   ]
 
   module Int = struct
@@ -71,7 +49,7 @@ module Make
   end
 
   type t = {
-    c2i: int CMap.t;
+    c2i: (int * sym) CMap.t;
     s2i: int SMap.t;
     i2cs: cs IMap.t;
     ctx: ctx;
@@ -80,17 +58,17 @@ module Make
     sing: SSet.t;
   }
 
-  let add_constant c t =
+  let add_constant c bv t =
     let (free,id) = Fresh.fresh t.free in
-    let c2i = CMap.add c id t.c2i in
+    let c2i = CMap.add c (id,bv) t.c2i in
     let i2cs = IMap.add id (Const c) t.i2cs in
     ({t with c2i; i2cs; free}, id)
 
-  let add_constant c t =
+  let add_constant c bv t =
     try
-      (t,CMap.find c t.c2i)
+      (t,fst (CMap.find c t.c2i))
     with Not_found ->
-      add_constant c t
+      add_constant c bv t
 
 
 
@@ -104,7 +82,7 @@ module Make
   let constant_mapping is_widening a b =
     (* imperative mapping *)
     let mapping = ref [] in
-    let add_mapping a b c =
+    let add_mapping (a: int) (b: int) (c: int) =
       mapping := (a,b,c) :: !mapping
     in
 
@@ -119,16 +97,16 @@ module Make
     (* imperative mapping construction *)
     let c2i = ref CMap.empty in
     let i2cs = ref IMap.empty in
-    let add_index c i =
-      c2i := CMap.add c i !c2i;
+    let add_index c i bv =
+      c2i := CMap.add c (i,bv) !c2i;
       i2cs := IMap.add i (Const c) !i2cs
     in
 
     (* make a and b references *)
     let a = ref a in
     let b = ref b in
-    let add_constant c a =
-      let (a', id) = add_constant c !a in
+    let add_constant c bv a =
+      let (a', id) = add_constant c bv !a in
       a := a';
       id
     in
@@ -136,31 +114,31 @@ module Make
     (* iterate over the constants *)
     ignore(CMap.merge (fun c ai bi ->
         match ai, bi with
-        | Some ai, Some bi ->
+        | Some (ai,bv), Some (bi,_) ->
           let ci = fresh () in
           add_mapping ai bi ci;
-          add_index c ci;
+          add_index c ci bv;
           None
-        | Some ai, None ->
+        | Some (ai,bv), None ->
           if is_widening then
             None
           else begin
-            let bi = add_constant c b in
+            let bi = add_constant c bv b in
             let ci = fresh () in
             (* add constant to b *)
             add_mapping ai bi ci;
-            add_index c ci;
+            add_index c ci bv;
             None
           end
-        | None, Some bi ->
+        | None, Some (bi,bv) ->
           if is_widening then
             None
           else begin
-            let ai = add_constant c a in
+            let ai = add_constant c bv a in
             let ci = fresh () in
             (* add constant to b *)
             add_mapping ai bi ci;
-            add_index c ci;
+            add_index c ci bv;
             None
           end
         | None, None -> None
@@ -248,8 +226,8 @@ module Make
     (* make a and b references *)
     let a = ref a in
     let b = ref b in
-    let add_constant c a =
-      let (a', id) = add_constant c !a in
+    let add_constant c bv a =
+      let (a', id) = add_constant c bv !a in
       a := a';
       id
     in
@@ -257,16 +235,16 @@ module Make
     (* iterate over the constants *)
     ignore(CMap.merge (fun c ai bi ->
         match ai, bi with
-        | Some ai, Some bi ->
+        | Some (ai,_), Some (bi,_) ->
           add_mapping ai bi;
           None
-        | Some ai, None ->
-            let bi = add_constant c b in
+        | Some (ai,bv), None ->
+            let bi = add_constant c bv b in
             (* add constant to b *)
             add_mapping ai bi;
             None
-        | None, Some bi ->
-            let ai = add_constant c a in
+        | None, Some (bi,bv) ->
+            let ai = add_constant c bv a in
             (* add constant to b *)
             add_mapping ai bi;
             None
@@ -378,7 +356,7 @@ module Make
   let rec constrain_forall bv sv c t =
     List.fold_left (fun t (v,cnst) ->
         if S.compare v bv = 0 then
-          let (t,id) = add_constant cnst t in
+          let (t,id) = add_constant cnst bv t in
           let id = Cudd.Bdd.ithvar t.ctx id in
           let sid = SMap.find sv t.s2i in
           let sid = Cudd.Bdd.ithvar t.ctx sid in
@@ -400,6 +378,8 @@ module Make
         constrain_cardinal c a
       | `ForAll (bv, sv, c) ->
         constrain_forall bv sv c a
+      | `True ->
+        a
 
 
   let rec sat_cardinal t c =
@@ -418,7 +398,7 @@ module Make
     match C.sat c with
     | Some c ->
       List.for_all (fun (v,cnst) ->
-          let (t,id) = add_constant cnst t in
+          let (t,id) = add_constant cnst bv t in
           let id = Cudd.Bdd.ithvar t.ctx id in
           let sid = SMap.find v t.s2i in
           let sid = Cudd.Bdd.ithvar t.ctx sid in
@@ -643,10 +623,29 @@ module Make
             raise Unsupported_representation
       ) uf (cnstrs,[]) in
 
-    (* TODO: show string constraints.  Need a way to generate symbols *)
-    (*let cnstrs = `Forall*)
+    (* TODO: show constant constraints.  Need a way to generate symbols *)
+    let cnstrs = List.fold_left (fun cnstrs (s,c) ->
+        let bv = snd(CMap.find c t.c2i) in
+        let c = C.to_constraint [(bv,c)] in
+        let cnstr = `Forall (bv, s, c) in
+        cnstr::cnstrs
+      ) cnstrs forall in
 
-    failwith "unimplemented"
+    let cnstrs = SSet.fold (fun s cnstrs ->
+        let cnstr = `Cardinal (`Eq(`Var s, `Const 1)) in
+        cnstr::cnstrs
+      ) t.sing cnstrs in
 
-  let equalities t = []
+    list2bin (fun a b -> `And(a,b)) `True cnstrs
+
+
+  let equalities t =
+    let eqs = fst(get_eq_ids t) in
+    List.fold_left (fun eqs (a,b) ->
+        match IMap.find a t.i2cs, IMap.find b t.i2cs with
+        | Symbol a, Symbol b -> (a,b)::eqs
+        | _ -> eqs
+      ) [] eqs
+
+
 end

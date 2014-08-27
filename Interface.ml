@@ -42,6 +42,8 @@ type ('sym,'se,'bc,'nc) set_cnstr = [
   | `SubsetEq of 'sym set_expr * 'sym set_expr
   | `Cardinal of 'nc
   | `ForAll of 'sym * 'sym * 'bc
+  | `And of ('sym,'se,'bc,'nc) set_cnstr * ('sym,'se,'bc,'nc) set_cnstr
+  | `True
 ]
 
 module type DomainSimp = sig

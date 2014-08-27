@@ -10,8 +10,6 @@ module Make
 
   type cnstr = [
     | (sym,expr,sym Interface.string_cnstr,sym Interface.num_cnstr) Interface.set_cnstr
-    | `And of cnstr * cnstr
-    | `True
     | `False
   ]
 
