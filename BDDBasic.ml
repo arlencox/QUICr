@@ -1,20 +1,50 @@
+(* TODO:
+  There is a fundamentally wrong construction made in this file.
+
+  The join, widening, meet, and le operations can add new symbols that
+  represent constants.  Because of this, every constant has a BDD node
+  associated with it.  This is a mistake because set constraints don't allow
+  constants in them.  Constants have to be constrained externally.  When trying
+  to convert the BDD back into constraints, when a constraint involved a
+  constant, what should be done?  The only general answer is to introduce a
+  fresh external symbol, but the API does not have this functionality and
+  should not.
+
+  There is another problem to with external symbols.  ForAll constraints have
+  bound variables and these bound variables are not saved in the domain, thus
+  to convert to constraints requires generating fresh bound variables (which
+  are also external).  To get around this problem requires that the bound
+  variable be saved with the constant, but as long as constants can exist that
+  weren't explicitly introduced externally, this cannot be done.  Interally
+  added constants would not have a bound variable associated.
+
+*)
+
 
 module Make
     (S : Interface.Sym)
-    (C : Interface.Domain with type sym = S.t)
-    (B : Interface.Domain with type sym = S.t)
-  : Interface.Domain = struct
-  type ctx = {
-    cctx : C.ctx;
-    bctx : B.ctx;
-    man : Cudd.Man.d Cudd.Man.t;
-  }
+    (C : Interface.Constant with type sym = S.t)
+  = struct
+
+  type ctx = Cudd.Man.d Cudd.Man.t
 
   type sym = S.t
 
-  type expr = (sym, C.expr, C.cnstr) Interface.set_expr
+  type num_cnstr = sym Interface.num_cnstr
 
-  type cnstr = (sym, C.expr, C.cnstr) Interface.set_cnstr
+  type set_expr = sym Interface.set_expr
+
+  type set_cnstr = [
+    | `Eq of set_expr * set_expr
+    | `SubsetEq of set_expr * set_expr
+  ]
+
+  type cnstr = [
+    | set_cnstr
+    | `Cardinal of num_cnstr
+    | `ForAll of sym * sym * C.cnstr
+    | `And of cnstr * cnstr
+  ]
 
   module Int = struct
     type t = int
@@ -24,380 +54,436 @@ module Make
   module IMap = Map.Make(Int)
   module SMap = Map.Make(S)
   module SSet = Set.Make(S)
-  module CSet = Set.Make(C)
+  module CMap = Map.Make(C)
 
-  module Base = struct
-    type t = {
-      uc: UC.t; (** underapproximation of cardinality *)
-      oc: OC.t; (** overapproximation of cardinality *)
-      ub: UB.t; (** underapproximation of contents *)
-      ob: OB.t; (** overapproximation of contents *)
-    }
+  type cs =
+    | Const of C.t
+    | Symbol of S.t
 
-    let top ctx = {
-      uc = UC.bottom ctx.ucctx;
-      oc = OC.top ctx.occtx;
-      ub = UB.bottom ctx.ubctx;
-      ob = OB.top ctx.obctx;
-    }
-
-    let empty = {
-      uc = UC.constant ctx.ucctx 0;
-      oc = OC.constant ctx.occtx 0;
-      ub = UB.constant ctx.ubctx [];
-      ob = UB.constant ctx.obctx [];
-    }
-
-    let universe = {
-
-    let universe = top
-
-    let singleton e =
-      let c = C.of_expr e in
-      {
-        lb = CSet.singleton c;
-        ub = Some (CSet.singleton c);
-        lc = 1;
-        uc = Some 1;
-      }
-
-    let union ia ib =
-      let lb = CSet.union ia.lb ib.lb in
-      {
-        lb = lb;
-        ub = (match ia.ub, ib.ub with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> Some (CSet.union ia ib));
-        lc = max (min ia.lc ib.lc) (CSet.cardinal lb);
-        uc =  (match ia.uc, ib.uc with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> Some (max ia ib));
-      }
-
-    let intersection ia ib =
-      let lb = CSet.inter ia.lb ib.lb in
-      {
-        lb = lb;
-        ub = (match ia.ub, ib.ub with
-            | None, None -> None
-            | None, Some o
-            | Some o, None -> Some o
-            | Some ia, Some ib -> Some (CSet.inter ia ib)
-          );
-        lc = CSet.cardinal lb;
-        uc = (match ia.uc, ib.uc with
-            | None, None -> None
-            | None, Some o
-            | Some o, None -> Some o
-            | Some ia, Some ib -> Some (min ia ib)
-          );
-      }
-
-    let complement i =
-      top
-
-
-    let join ia ib =
-      {
-        lb = CSet.inter ia.lb ib.lb;
-        ub = (match ia.ub, ib.ub with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> Some (CSet.union ia ib));
-        lc = min ia.lc ib.lc;
-        uc = (match ia.uc, ib.uc with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> Some (max ia ib));
-      }
-
-    let widening ia ib =
-      {
-        lb = CSet.inter ia.lb ib.lb;
-        ub = (match ia.ub, ib.ub with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> 
-              if CSet.subset ib ia then
-                Some ia
-              else
-                None
-          );
-        lc = min ia.lc ib.lc;
-        uc = (match ia.uc, ib.uc with
-            | None, _
-            | _, None -> None
-            | Some ia, Some ib -> if ib > ia then None
-              else Some ia
-          );
-      }
+  module CS = struct
+    type t = cs
+    let compare a b =
+      match a,b with
+      | Symbol _, Const _ -> -1
+      | Const _, Symbol _ -> 1
+      | Symbol a, Symbol b -> S.compare a b
+      | Const a, Const b -> C.compare a b
   end
 
-  type info = {
-    bddid: int;   (** bdd identifier for this symbol *)
-    base: Base.t; (** base domain for values and cardinality *)
-  }
-
   type t = {
+    c2i: int CMap.t;
+    s2i: int SMap.t;
+    i2cs: cs IMap.t;
     ctx: ctx;
     bdd: Cudd.Man.d Cudd.Bdd.t;
-    smap: info SMap.t;
     free: Fresh.t;
+    sing: SSet.t;
   }
 
-  let init () = {
-    bctx = C.init ();
-    man = Cudd.Man.make_d ();
-  }
+  let add_constant c t =
+    let (free,id) = Fresh.fresh t.free in
+    let c2i = CMap.add c id t.c2i in
+    let i2cs = IMap.add id (Const c) t.i2cs in
+    ({t with c2i; i2cs; free}, id)
+
+  let add_constant c t =
+    try
+      (t,CMap.find c t.c2i)
+    with Not_found ->
+      add_constant c t
+
+
+
+  (** {2 Join/Widening/Meet -- Ternary Operations } *)
+
+
+
+
+  (** [constant_mapping is_widening a b] constructs a mapping for constants based
+      on which constants are shared between [a] and [b]. *)
+  let constant_mapping is_widening a b =
+    (* imperative mapping *)
+    let mapping = ref [] in
+    let add_mapping a b c =
+      mapping := (a,b,c) :: !mapping
+    in
+
+    (* imperative fresh varible generator *)
+    let free = ref Fresh.empty in
+    let fresh () =
+      let (free',v) = Fresh.fresh !free in
+      free := free';
+      v
+    in
+
+    (* imperative mapping construction *)
+    let c2i = ref CMap.empty in
+    let i2cs = ref IMap.empty in
+    let add_index c i =
+      c2i := CMap.add c i !c2i;
+      i2cs := IMap.add i (Const c) !i2cs
+    in
+
+    (* make a and b references *)
+    let a = ref a in
+    let b = ref b in
+    let add_constant c a =
+      let (a', id) = add_constant c !a in
+      a := a';
+      id
+    in
+
+    (* iterate over the constants *)
+    ignore(CMap.merge (fun c ai bi ->
+        match ai, bi with
+        | Some ai, Some bi ->
+          let ci = fresh () in
+          add_mapping ai bi ci;
+          add_index c ci;
+          None
+        | Some ai, None ->
+          if is_widening then
+            None
+          else begin
+            let bi = add_constant c b in
+            let ci = fresh () in
+            (* add constant to b *)
+            add_mapping ai bi ci;
+            add_index c ci;
+            None
+          end
+        | None, Some bi ->
+          if is_widening then
+            None
+          else begin
+            let ai = add_constant c a in
+            let ci = fresh () in
+            (* add constant to b *)
+            add_mapping ai bi ci;
+            add_index c ci;
+            None
+          end
+        | None, None -> None
+      ) !a.c2i !b.c2i);
+    (
+      !a, (* a potentially updated a domain *)
+      !b, (* a potentially updated b domain *)
+      {   (* the initial c domain *)
+        c2i = !c2i;
+        s2i = SMap.empty;
+        i2cs = !i2cs;
+        ctx = !a.ctx;
+        bdd = Cudd.Bdd.dtrue !a.ctx;
+        free = !free;
+        sing = SSet.empty;
+      },
+      !mapping (* the mapping in terms of bdd ids *)
+    )
+
+  (* function that performs a renaming on the bdd *)
+  let do_rename imap bdd =
+    let max = fst (IMap.max_binding imap) in
+    let mapping = Array.make (max+1) (-1) in
+    IMap.iter (fun fid tid ->
+        mapping.(fid) <- tid
+      ) imap;
+    let supp = snd (Array.fold_left (fun (i,supp) tid ->
+        let supp = if tid < 0 then
+            Cudd.Bdd.dand (Cudd.Bdd.ithvar (Cudd.Bdd.manager bdd) i) supp
+          else
+            supp in
+        (i+1, supp)
+      ) (0, Cudd.Bdd.dtrue (Cudd.Bdd.manager bdd)) mapping) in
+    let bdd = Cudd.Bdd.exist supp bdd in
+    Cudd.Bdd.permute bdd mapping
+
+  let upper_bound op is_widening mapping a b =
+    let (a,b,c,imapping) = constant_mapping is_widening a b in
+
+    (* construct integer mapping for symbols *)
+    let (imapping,c) = List.fold_left (fun (imapping,c) (va,vb,vc) ->
+        let ia = SMap.find va a.s2i in
+        let ib = SMap.find vb b.s2i in
+        let (free,ic) = try
+            (c.free,SMap.find vc c.s2i)
+          with Not_found ->
+            Fresh.fresh c.free
+        in
+        let s2i = SMap.add vc ic c.s2i in
+        let i2cs = IMap.add ic (Symbol vc) c.i2cs in
+        let c = {c with s2i; i2cs; free} in
+        ((ia,ib,ic)::imapping, c)
+      ) (imapping,c) mapping in
+
+    (* construct a proper map *)
+    let (amap,bmap) = List.fold_left (fun (amap,bmap) (ia,ib,ic) ->
+        (IMap.add ia ic amap, IMap.add ib ic bmap)
+      ) (IMap.empty,IMap.empty) imapping in
+
+    (* do renaming *)
+    let bdda = do_rename amap a.bdd in
+    let bddb = do_rename bmap b.bdd in
+    let bddc = op bdda bddb in
+    {c with bdd = bddc}
+
+  let meet = upper_bound Cudd.Bdd.dand false
+
+  let join = upper_bound Cudd.Bdd.dor false
+
+  let widening = upper_bound Cudd.Bdd.dor true
+
+
+
+  (** {2 le -- binary operations} *)
+
+  (** [constant_mapping is_widening a b] constructs a mapping for constants based
+      on which constants are shared between [a] and [b]. *)
+  let constant_le_mapping a b =
+    (* imperative mapping *)
+    let mapping = ref [] in
+    let add_mapping a b =
+      mapping := (a,b) :: !mapping
+    in
+
+    (* make a and b references *)
+    let a = ref a in
+    let b = ref b in
+    let add_constant c a =
+      let (a', id) = add_constant c !a in
+      a := a';
+      id
+    in
+
+    (* iterate over the constants *)
+    ignore(CMap.merge (fun c ai bi ->
+        match ai, bi with
+        | Some ai, Some bi ->
+          add_mapping ai bi;
+          None
+        | Some ai, None ->
+            let bi = add_constant c b in
+            (* add constant to b *)
+            add_mapping ai bi;
+            None
+        | None, Some bi ->
+            let ai = add_constant c a in
+            (* add constant to b *)
+            add_mapping ai bi;
+            None
+        | None, None -> None
+      ) !a.c2i !b.c2i);
+    (
+      !a, (* a potentially updated a domain *)
+      !b, (* a potentially updated b domain *)
+      !mapping (* the mapping in terms of bdd ids *)
+    )
+
+  let le mapping a b =
+    let (a,b,imapping) = constant_le_mapping a b in
+
+    (* construct integer mapping for symbols *)
+    let imapping = List.fold_left (fun imapping (va,vb) ->
+        let ia = SMap.find va a.s2i in
+        let ib = SMap.find vb b.s2i in
+        ((ia,ib)::imapping)
+      ) (imapping) mapping in
+
+    (* construct a proper map *)
+    let amap = List.fold_left (fun amap (ia,ib) ->
+        IMap.add ia ib amap
+      ) IMap.empty imapping in
+
+    let bdda = do_rename amap a.bdd in
+    let bddb = b.bdd in
+    Cudd.Bdd.is_leq bdda bddb
+
 
   let top ctx syms =
-    let (free,smap) = List.fold_left (fun (free,smap) sym ->
-        let (free, id) = Fresh.fresh free in
-        let info = {
-          bddid = id;
-          base = Base.top;
-        } in
-        (free, SMap.add sym info smap)
-      ) (Fresh.empty,SMap.empty) syms in
+    let (free,s2i,i2cs) = List.fold_left (fun (free,s2i,i2cs) s ->
+        let (free, i) = Fresh.fresh free in
+        let s2i = SMap.add s i s2i in
+        let i2cs = IMap.add i (Symbol s) i2cs in
+        (free,s2i,i2cs)
+      ) (Fresh.empty,SMap.empty,IMap.empty) syms in
     {
       ctx = ctx;
-      bdd = Cudd.Bdd.dtrue ctx.man;
-      smap = smap;
+      bdd = Cudd.Bdd.dtrue ctx;
+      s2i = s2i;
+      i2cs = i2cs;
+      c2i = CMap.empty;
       free = free;
+      sing = SSet.empty;
     }
 
-  let topd t =
-    {t with
-     bdd = Cudd.Bdd.dtrue t.ctx.man }
-
-  let bottomd t =
-    {t with
-     bdd = Cudd.Bdd.dfalse t.ctx.man }
-
-
   let bottom ctx syms =
-    bottomd @@ top ctx syms
+    let t = top ctx syms in
+    { t with bdd = Cudd.Bdd.dfalse ctx }
 
   let context t = t.ctx
 
   let symbols_set t =
-    SMap.fold (fun sym _ syms -> SSet.add sym syms) t.smap SSet.empty
+    SMap.fold (fun sym _ syms -> SSet.add sym syms) t.s2i SSet.empty
 
   let symbols t =
-    SMap.fold (fun sym _ syms -> sym::syms) t.smap []
-
-  let reduce a = a
-
-  type gen_imap_thread = {
-    imapa: int IMap.t; (** maps bdd index in a to index in c *)
-    freea: Fresh.t; (** free indexes in a *)
-    bdda: Cudd.Man.d Cudd.Bdd.t; (** a bdd *)
-    imapb: int IMap.t; (** maps bdd index in b to index in c *)
-    freeb: Fresh.t; (** free indexes in b *)
-    bddb: Cudd.Man.d Cudd.Bdd.t; (** b bdd *)
-    rmap: info SMap.t; (** maps symbol in c to bdd index in c *)
-    freer: Fresh.t; (** free indexes in c *)
-  }
-
-  let upper_bound join_base mapping a b =
-    let generate_smap mapping a b =
-      let threaded = {
-        imapa = IMap.empty;
-        freea = a.free;
-        bdda = a.bdd;
-        imapb = IMap.empty;
-        freeb = b.free;
-        bddb = b.bdd;
-        rmap = SMap.empty;
-        freer = Fresh.empty;
-      } in
-      let threaded = List.fold_left (fun threaded (sa,sb,sr) ->
-          (* get indexes of symbols a and b *)
-          let ia = SMap.find sa a.smap in
-          let ib = SMap.find sb b.smap in
-          (* find target id, use existing if present, otherwise, create fresh *)
-          let (freer,bddidr) = try (threaded.freer,(SMap.find sr threaded.rmap).bddid) with Not_found -> Fresh.fresh threaded.freer in
-          (* determine if ia has already been assigned in the BDD, and if so, create a fresh index *)
-          let cnstr_eq ix imapx freex bddx =
-            if IMap.mem ix.bddid imapx then
-              let (freex, bddidx') = Fresh.fresh freex in
-              let dvar = Cudd.Bdd.ithvar a.ctx.man ix.bddid in
-              let dvar' = Cudd.Bdd.ithvar a.ctx.man bddidx' in
-              let deq = Cudd.Bdd.eq dvar dvar' in
-              let bddx = Cudd.Bdd.dand deq bddx in
-              ({ix with bddid=bddidx'},bddx,freex)
-            else
-              (ix,bddx,freex)
-          in
-          let (ia,bdda,freea) = cnstr_eq ia threaded.imapa threaded.freea threaded.bdda in
-          let (ib,bddb,freeb) = cnstr_eq ib threaded.imapb threaded.freeb threaded.bddb in
-          (* extend imaps *)
-          let imapa = IMap.add ia.bddid bddidr threaded.imapa in
-          let imapb = IMap.add ib.bddid bddidr threaded.imapb in
-          (* join ia with ib *)
-          let ir = {
-            bddid = bddidr;
-            base = join_base ia.base ib.base;
-          } in
-          (* extend rmap *)
-          let rmap = SMap.add sr ir threaded.rmap in
-          { imapa; freea; bdda; imapb; freeb; bddb; rmap; freer; }
-        ) threaded mapping in
-      threaded
-    in
-
-    let do_rename imap bdd =
-      let max = fst (IMap.max_binding imap) in
-      let mapping = Array.make (max+1) (-1) in
-      IMap.iter (fun fid tid ->
-          mapping.(fid) <- tid
-        ) imap;
-      let supp = snd (Array.fold_left (fun (i,supp) tid ->
-          let supp = if tid < 0 then
-              Cudd.Bdd.dand (Cudd.Bdd.ithvar (Cudd.Bdd.manager bdd) i) supp
-            else
-              supp in
-          (i+1, supp)
-        ) (0, Cudd.Bdd.dtrue (Cudd.Bdd.manager bdd)) mapping) in
-      let bdd = Cudd.Bdd.exist supp bdd in
-      Cudd.Bdd.permute bdd mapping
-    in
-
-
-    (* contexts must be identical *)
-    assert(a.ctx == b.ctx);
-    (* perform reductions as appropriate *)
-    let a = reduce a in
-    let b = reduce b in
-    (* compute bdd mapping *)
-    let threaded = generate_smap mapping a b in
-    let bdda = do_rename threaded.imapa threaded.bdda in
-    let bddb = do_rename threaded.imapb threaded.bddb in
-    let bddc = Cudd.Bdd.dor bdda bddb in
-    {
-      ctx = a.ctx;
-      bdd = bddc;
-      smap = threaded.rmap;
-      free = threaded.freer;
-    }
-
-  let join mapping a b =
-    upper_bound Base.join mapping a b
-
-  let widening mapping a b =
-    upper_bound Base.widening mapping a b
-
-  let meet mapping a b =
-    failwith "unimplemented"
-
-  let le mapping a b =
-    failwith "unimplemented"
+    SMap.fold (fun sym _ syms -> sym::syms) t.s2i []
 
   exception Var_not_found of S.t
-  exception Unsupported_expression
 
-  let rec constrain (cnstr: cnstr) a =
+  let constrain_set (cnstr: set_cnstr) bdd t =
     let rec of_expr = function
       | `Union (l,r) ->
-        let (bddl, sl, bl) = of_expr l in
-        let (bddr, sr, br) = of_expr r in
-        let bdd = match bddl, bddr with
-          | Some bddl, Some bddr -> Some (Cudd.Bdd.dor bddl bddr)
-          | _ -> None
-        in
-        let s = match sl, sr with
-          | Some sl, Some sr when S.compare sl sr = 0 -> Some sl
-          | _ -> None
-        in
-        let b = Base.union bl br in
-        (bdd,s,b)
+        Cudd.Bdd.dor (of_expr l) (of_expr r)
       | `Inter (l,r) ->
-        let (bddl, sl, bl) = of_expr l in
-        let (bddr, sr, br) = of_expr r in
-        let bdd = match bddl, bddr with
-          | Some bddl, Some bddr -> Some (Cudd.Bdd.dand bddl bddr)
-          | _ -> None
-        in
-        let s = match sl, sr with
-          | Some sl, Some sr when S.compare sl sr = 0 -> Some sl
-          | _ -> None
-        in
-        let b = Base.intersection bl br in
-        (bdd, s, b)
+        Cudd.Bdd.dand (of_expr l) (of_expr r)
       | `Difference (l,r) ->
-        failwith "unimplemented"
+        Cudd.Bdd.dand (of_expr l) (Cudd.Bdd.dnot (of_expr r))
       | `Complement e ->
-        failwith "unimplemented"
+        Cudd.Bdd.dnot (of_expr e)
       | `Var v ->
         begin try
-            let info = (SMap.find v a.smap) in
-            let bdd = Cudd.Bdd.ithvar a.ctx.man info.bddid in
-            (Some bdd, Some v, info.base)
+            Cudd.Bdd.ithvar t.ctx (SMap.find v t.s2i)
           with Not_found ->
             raise (Var_not_found v)
         end
-      | `Singleton e -> 
-        (None, None, Base.singleton e)
       | `Empty ->
-        (Some (Cudd.Bdd.dfalse a.ctx.man), None, Base.empty)
+        Cudd.Bdd.dfalse t.ctx
       | `Universe ->
-        (Some (Cudd.Bdd.dtrue a.ctx.man), None, Base.universe)
-      | `Comprehension _ ->
-        raise Unsupported_expression
+       Cudd.Bdd.dtrue t.ctx
     in
-    try
+    match cnstr with
+    | `Eq(l,r) ->
+      let l = of_expr l in
+      let r = of_expr r in
+      let bdd' = Cudd.Bdd.eq l r in
+      Cudd.Bdd.dand bdd bdd'
+    | `SubsetEq(l,r) ->
+      let l = of_expr l in
+      let r = of_expr r in
+      let bdd' = Cudd.Bdd.dor (Cudd.Bdd.dnot l) r in
+      Cudd.Bdd.dand bdd' bdd'
+
+
+  let rec constrain_cardinal (c: num_cnstr) t =
+    match c with
+    | `And (c1, c2) ->
+      let t = constrain_cardinal c1 t in
+      constrain_cardinal c2 t
+    | `Eq (`Var v, `Const 1) ->
+      {t with sing = SSet.add v t.sing }
+    | `Eq (`Const 1, `Var v) ->
+      {t with sing = SSet.add v t.sing }
+    | _ ->
+      t
+
+  let rec constrain_forall bv sv c t =
+    List.fold_left (fun t (v,cnst) ->
+        if S.compare v bv = 0 then
+          let (t,id) = add_constant cnst t in
+          let id = Cudd.Bdd.ithvar t.ctx id in
+          let sid = SMap.find sv t.s2i in
+          let sid = Cudd.Bdd.ithvar t.ctx sid in
+          let bdd' = Cudd.Bdd.eq sid id in
+          { t with bdd = Cudd.Bdd.dand t.bdd bdd' }
+        else
+          t
+      ) t (C.constrain c)
+
+
+  let rec constrain (cnstr: cnstr) a =
       match cnstr with
+      | #set_cnstr as cnstr ->
+        { a with bdd = constrain_set cnstr a.bdd a }
       | `And(l,r) ->
         let a = constrain l a in
         constrain r a
-      | `Eq(l,r) ->
-        failwith "unimplemented"
-      | `SubsetEq(l,r) ->
-        let (bddl, sl, vl) = of_expr l in
-        let (bddr, sr, vr) = of_expr r in
-        let bdd = match bddl, bddr with
-          | Some bddl, Some bddr ->
-            (* constrain the bdd part *)
-            let bdd = Cudd.Bdd.dor (Cudd.Bdd.dnot bddl) bddr in
-            Cudd.Bdd.dand a.bdd bdd
-          | _ -> a.bdd
-        in
-        let smap = match sl with
-          | Some sl ->
-            let info = try SMap.find sl a.smap with Not_found -> assert false in
-            (* do subset constraint *)
-            failwith "unimplemented"
-          | None -> a.smap
-        in
-        let smap = match sr with
-          | Some sr ->
-            let info = try SMap.find sr smap with Not_found -> assert false in
-            (* do subset constraint *)
-            failwith "unimplemented"
-          | None -> smap
-        in
-        { a with
-          bdd = bdd;
-          smap = smap;
-        }
-      | `Base bc ->
-        raise Unsupported_expression
-    with Unsupported_expression ->
-      a
+      | `Cardinal c ->
+        constrain_cardinal c a
+      | `ForAll (bv, sv, c) ->
+        constrain_forall bv sv c a
+
+
+  let rec sat_cardinal t c =
+    match c with
+    | `And (c1, c2) ->
+      sat_cardinal t c2 && sat_cardinal t c2
+    | `Eq (`Var v, `Const 1)
+    | `Eq (`Const 1, `Var v) ->
+      SSet.mem v t.sing
+    | _ ->
+      false
+
+
+
+  let sat_forall bv sv c t =
+    match C.sat c with
+    | Some c ->
+      List.for_all (fun (v,cnst) ->
+          let (t,id) = add_constant cnst t in
+          let id = Cudd.Bdd.ithvar t.ctx id in
+          let sid = SMap.find v t.s2i in
+          let sid = Cudd.Bdd.ithvar t.ctx sid in
+          let bdd' = Cudd.Bdd.eq sid id in
+          Cudd.Bdd.is_leq t.bdd bdd'
+        ) c
+    | None ->
+      false
 
   let sat t c =
-    failwith "unimplemented"
+    let bdd_of_bool b =
+      if b then
+        Cudd.Bdd.dtrue t.ctx
+      else
+        Cudd.Bdd.dfalse t.ctx
+    in
+    let rec sat bdd = function
+      | #set_cnstr as cnstr ->
+        constrain_set cnstr bdd t
+      | `And(l,r) ->
+        let bdd = sat bdd l in
+        sat bdd r
+      | `Cardinal c ->
+        Cudd.Bdd.dand bdd (bdd_of_bool (sat_cardinal t c))
+      | `ForAll (bv, sv, c) ->
+        Cudd.Bdd.dand bdd (bdd_of_bool (sat_forall bv sv c t))
+    in
+    let bdd = sat (Cudd.Bdd.dtrue t.ctx) c in
+    Cudd.Bdd.is_leq t.bdd bdd
+
 
   let constrain_eq s1 s2 a =
-    failwith "unimplemented"
+    constrain (`Eq (`Var s1, `Var s2)) a
+
+  let add_symbol t sym =
+    if SMap.mem sym t.s2i then
+      t
+    else
+      let (free,id) = Fresh.fresh t.free in
+      { t with
+        s2i = SMap.add sym id t.s2i;
+        i2cs = IMap.add id (Symbol sym) t.i2cs;
+        free = free;
+      }
 
   let add_symbols syms t =
-    failwith "unimplemented"
+    List.fold_left add_symbol t syms
 
   let remove_symbols syms t =
-    failwith "unimplemented"
+    let (t, support) = List.fold_left (fun (t, support) sym ->
+        try
+          let id = SMap.find sym t.s2i in
+          let t = {t with 
+           s2i = SMap.remove sym t.s2i;
+           i2cs = IMap.remove id t.i2cs;
+           sing = SSet.remove sym t.sing;
+          } in
+          let id = Cudd.Bdd.ithvar t.ctx id in
+          (t, Cudd.Bdd.dand id support)
+        with Not_found ->
+          (t, support)
+      ) (t, Cudd.Bdd.dtrue t.ctx) syms in
+    {t with
+     bdd = Cudd.Bdd.exist support t.bdd
+    }
 
   let forget syms t =
     (* only use symbols that are already in the domain *)
@@ -410,19 +496,157 @@ module Make
     add_symbols syms t
 
   let rename_symbols f t =
-    failwith "unimplemented"
+    let map = List.fold_left (fun map (f,t) -> SMap.add f t map) SMap.empty f in
+
+    let s2i = SMap.fold (fun s i s2i ->
+        let s = try
+          SMap.find s map
+        with Not_found ->
+          s
+        in
+        SMap.add s i s2i
+      ) SMap.empty t.s2i in
+    let i2cs = IMap.fold (fun i cs i2cs ->
+        let cs = match cs with
+        | Symbol s ->
+          let s = try
+              SMap.find s map
+            with Not_found ->
+              s
+          in
+          Symbol s
+        | Const _ -> cs
+        in
+        IMap.add i cs i2cs
+      ) IMap.empty t.i2cs in
+    { t with s2i; i2cs }
+
+  let iter_quic f t =
+    let nbdd = Cudd.Bdd.dnot t.bdd in
+    Cudd.Bdd.iter_prime (fun vars ->
+        let (n,p,i) = Array.fold_left (fun (n,p,i) v ->
+            let (n,p) = match v with
+              | Cudd.Man.True ->
+                (i::n,p)
+              | Cudd.Man.False ->
+                (n,i::p)
+              | _ ->
+                (n,p)
+            in
+            let i = i + 1 in
+            (n,p,i)
+          ) ([],[],0) vars in
+        f n p
+      ) nbdd nbdd
+
+  let fold_quic f t r =
+    let r = ref r in
+    iter_quic (fun n p ->
+        r := f n p !r
+      ) t;
+    !r
+
+  let get_eq_ids t =
+    (* split into binary quic constraints and other quic constraints *)
+    let (bin,other) = fold_quic (fun n p (bin,other) ->
+        match n,p with
+        | [n],[p] -> ((n,p)::bin,other)
+        | _ -> (bin,(n,p)::other)
+      ) t ([],[]) in
+
+    (* split into equality constraints and other quic constraints *)
+    let cmpbin (a,b) (c,d) =
+      let min1 = min a b in
+      let min2 = min c d in
+      let max1 = max a b in
+      let max2 = max c d in
+      let res = compare min1 min2 in
+      if res <> 0 then res
+      else
+        let res = compare max1 max2 in
+        if res <> 0 then res
+        else
+          let res = compare a c in
+          if res <> 0 then res
+          else
+            compare b d
+    in
+    let bin = List.sort cmpbin bin in
+    let rec identify_eq eqs other = function
+      | (a,b)::(c,d)::rest when a = d && b = c ->
+        identify_eq ((a,b)::eqs) other rest
+      | (a,b)::rest ->
+        identify_eq eqs (([a],[b])::other) rest
+      | [] ->
+        (eqs,other)
+    in
+    let (eqs,other) = identify_eq [] other bin in
+    (eqs,other)
+
+  module U = UnionFind.Make(CS)
+
+  let list2bin op un l =
+    let res = List.fold_left (fun res el ->
+        match res with
+        | None -> Some el
+        | Some res -> Some (op res el)
+      ) None l
+    in
+    match res with
+    | None -> un
+    | Some s -> s
+
+  exception Unsupported_representation
 
   let to_constraint t =
+    (* get equalities *)
+    let (eqs,other) = get_eq_ids t in
+    (* add equalities to union find ensuring symbols are always the representative *)
+    let uf = List.fold_left (fun uf (a,b) ->
+        let csa = IMap.find a t.i2cs in
+        let csb = IMap.find a t.i2cs in
+        U.union csa csb uf
+      ) U.empty eqs in
+
+    (* convert a list of ids to symbols raising an error if the representative is not a symbol *)
+    let convert_and_replace l =
+      List.rev_map (fun id ->
+          let cs = IMap.find id t.i2cs in
+          match snd(U.get_representative cs uf) with
+          | Symbol s -> s
+          | Const _ -> raise Unsupported_representation
+        ) l
+    in
+
+    (* convert other to constraints *)
+    let cnstrs = List.rev_map (fun (n,p) ->
+        let n = List.map (fun v -> `Var v) (convert_and_replace n) in
+        let n = list2bin (fun a b -> `Inter(a,b)) `Universe n in
+        let p = List.map (fun v -> `Var v) (convert_and_replace p) in
+        let p = list2bin (fun a b -> `Union(a,b)) `Empty p in
+        `SubsetEq (n,p)
+      ) other in
+
+    (* convert equalities to either const contraints or set constraints *)
+    let (cnstrs,forall) = U.fold (fun k v (cnstrs,forall) ->
+        if CS.compare k v = 0 then
+          (cnstrs,forall)
+        else
+          match k,v with
+          | Symbol s, Const c
+          | Const c, Symbol s ->
+            (cnstrs, (s,c)::forall)
+          | Symbol s1, Symbol s2 ->
+            let eq = `Eq(`Var s1, `Var s2) in
+            (eq::cnstrs, forall)
+          | Const c1, Const c2 ->
+            raise Unsupported_representation
+      ) uf (cnstrs,[]) in
+
+    (* TODO: show string constraints.  Need a way to generate symbols *)
+    (*let cnstrs = `Forall*)
+
     failwith "unimplemented"
 
-  let equalities t =
-    failwith "unimplemented"
-
-  let abstract ctx syms c =
-    let t = top ctx syms in
-    constrain c t
-
-  let abstractd d c =
-    let t = topd d in
-    constrain c t
+  let equalities t = []
 end

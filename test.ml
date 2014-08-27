@@ -1,2 +1,2 @@
-(*open BDDBasic*)
+open BDDBasic
 open CardinalInterval

@@ -28,26 +28,25 @@ type 'sym num_cnstr = [
   | `Lt of 'sym num_expr * 'sym num_expr
 ]
 
-(*type 'sym set_expr = [
+type 'sym set_expr = [
   | `Union of 'sym set_expr * 'sym set_expr
   | `Inter of 'sym set_expr * 'sym set_expr
   | `Complement of 'sym set_expr
   | `Var of 'sym
   | `Empty
   | `Universe
-]*)
+]
 
 type ('sym,'se,'bc,'nc) set_cnstr = [
-  | `SubsetEq of 'sym list * 'sym list
+  | `Eq of 'sym set_expr * 'sym set_expr
+  | `SubsetEq of 'sym set_expr * 'sym set_expr
   | `Cardinal of 'nc
   | `ForAll of 'sym * 'sym * 'bc
 ]
 
-
-module type Domain = sig
+module type DomainSimp = sig
   type ctx   (** the context (mutable state) for managing the domain *)
   type sym   (** the type of symbols used in the domain *)
-  type expr  (** the type of expressions used in the domain *)
   type cnstr (** the type of constraints used in the domain *)
   type t     (** the type of the domain itself *)
 
@@ -58,25 +57,9 @@ module type Domain = sig
       of symbols [syms] in the domain *)
   val top : ctx -> sym list -> t
 
-  (** [top d] creates a new top element from an existing domain element [d],
-      symbols and context are copied *)
-  val topd : t -> t
-
   (** [bottom ctx syms] creates a new bottom element from a context [ctx] and a
       set of symbols [syms] in the domain *)
   val bottom : ctx -> sym list -> t
-
-  (** [bottom d] creates a new bottom element from an existing domain element
-      [d], symbols and context are copied *)
-  val bottomd : t -> t
-
-  (** [abstract ctx syms c] creates a new element that overapproximates [cnstr]
-      from a context [ctx] and a set of symbols [syms] *)
-  val abstract : ctx -> sym list -> cnstr -> t
-
-  (** [abstractd d c] creates a new element that overapproximates [cnstr] from
-    an existing domain element [d], symbols and context are copied from [d] *)
-  val abstractd : t -> cnstr -> t
 
   (** [context t] returns the context used to construct [t] *)
   val context : t -> ctx
@@ -153,6 +136,28 @@ module type Domain = sig
   val equalities : t -> (sym * sym) list
 end
 
+
+(** Domain with convenience functions *)
+module type Domain = sig
+  include DomainSimp
+
+  (** [top d] creates a new top element from an existing domain element [d],
+      symbols and context are copied *)
+  val topd : t -> t
+
+  (** [bottom d] creates a new bottom element from an existing domain element
+      [d], symbols and context are copied *)
+  val bottomd : t -> t
+
+  (** [abstract ctx syms c] creates a new element that overapproximates [cnstr]
+      from a context [ctx] and a set of symbols [syms] *)
+  val abstract : ctx -> sym list -> cnstr -> t
+
+  (** [abstractd d c] creates a new element that overapproximates [cnstr] from
+    an existing domain element [d], symbols and context are copied from [d] *)
+  val abstractd : t -> cnstr -> t
+end
+
 module type Ordered = sig
   type t
   val compare: t -> t -> int
@@ -160,5 +165,21 @@ end
 
 module type Sym = sig
   type t
+  val compare: t -> t -> int
+end
+
+module type Constant = sig
+  type sym
+  type cnstr
+  type t
+
+  (** returns a list of var = const pairs *)
+  val constrain: cnstr -> (sym * t) list
+
+  (** returns a list of var = const pairs or none if a constraint cannot be converted *)
+  val sat: cnstr -> (sym * t) list option
+
+  val to_constraint: (sym * t) list -> cnstr
+
   val compare: t -> t -> int
 end

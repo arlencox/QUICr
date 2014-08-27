@@ -130,7 +130,10 @@ module Make
       split_constraints cnstrs b
     | `SubsetEq (l,r) ->
       let (subset,card,cont) = cnstrs in
-      ((l,r)::subset, card, cont)
+      ((`SubsetEq (l,r))::subset, card, cont)
+    | `Eq (l,r) ->
+      let (subset,card,cont) = cnstrs in
+      ((`Eq (l,r))::subset, card, cont)
     | `Cardinal c ->
       let (subset,card,cont) = cnstrs in
       (subset, c::card, cont)
@@ -200,7 +203,7 @@ module Make
     | `True ->
       t
 
-  let constrain_subset (l,r) t =
+  let constrain_subset c t =
     failwith "unimplemented"
 
   let constrain c t =
@@ -214,7 +217,7 @@ module Make
     failwith "unimplemented"
 
   let constrain_eq s1 s2 a =
-    failwith "unimplemented"
+    constrain_subset ([s1],[s2]) a
 
   let add_symbols ?level:(level=0) syms t =
     if level = 0 then
