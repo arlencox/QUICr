@@ -1,15 +1,22 @@
 module Make
     (S : Interface.Sym)
     (C : Interface.Constant with type sym = S.t)
-  = struct
+  : Interface.DomainSimp
+    with type sym = S.t
+     and type cnstr = (S.t,
+                       S.t Commands.set_expr,
+                       C.cnstr,
+                       S.t Commands.num_cnstr) Commands.set_cnstr
+  =
+struct
 
   type ctx = Cudd.Man.d Cudd.Man.t
 
   type sym = S.t
 
-  type num_cnstr = sym Interface.num_cnstr
+  type num_cnstr = sym Commands.num_cnstr
 
-  type set_expr = sym Interface.set_expr
+  type set_expr = sym Commands.set_expr
 
   type set_cnstr = [
     | `Eq of set_expr * set_expr
@@ -22,6 +29,7 @@ module Make
     | `ForAll of sym * sym * C.cnstr
     | `And of cnstr * cnstr
     | `True
+    | `False
   ]
 
   module Int = struct
@@ -57,6 +65,8 @@ module Make
     free: Fresh.t;
     sing: SSet.t;
   }
+
+  let init () = Cudd.Man.make_d ()
 
   let add_constant c bv t =
     let (free,id) = Fresh.fresh t.free in
@@ -354,17 +364,21 @@ module Make
       t
 
   let rec constrain_forall bv sv c t =
-    List.fold_left (fun t (v,cnst) ->
-        if S.compare v bv = 0 then
-          let (t,id) = add_constant cnst bv t in
-          let id = Cudd.Bdd.ithvar t.ctx id in
-          let sid = SMap.find sv t.s2i in
-          let sid = Cudd.Bdd.ithvar t.ctx sid in
-          let bdd' = Cudd.Bdd.eq sid id in
-          { t with bdd = Cudd.Bdd.dand t.bdd bdd' }
-        else
-          t
-      ) t (C.constrain c)
+    match C.constrain c with
+    | Some c ->
+      List.fold_left (fun t (v,cnst) ->
+          if S.compare v bv = 0 then
+            let (t,id) = add_constant cnst bv t in
+            let id = Cudd.Bdd.ithvar t.ctx id in
+            let sid = SMap.find sv t.s2i in
+            let sid = Cudd.Bdd.ithvar t.ctx sid in
+            let bdd' = Cudd.Bdd.eq sid id in
+            { t with bdd = Cudd.Bdd.dand t.bdd bdd' }
+          else
+            t
+        ) t c
+    | None ->
+      {t with bdd = Cudd.Bdd.dfalse t.ctx}
 
 
   let rec constrain (cnstr: cnstr) a =
@@ -380,6 +394,8 @@ module Make
         constrain_forall bv sv c a
       | `True ->
         a
+      | `False ->
+        { a with bdd = Cudd.Bdd.dfalse a.ctx }
 
 
   let rec sat_cardinal t c =
@@ -394,28 +410,31 @@ module Make
 
 
 
-  let sat_forall bv sv c t =
+  let sat_forall (bv: sym) (sv: sym) (c: C.cnstr) (t:t) : bool =
     match C.sat c with
     | Some c ->
       List.for_all (fun (v,cnst) ->
-          let (t,id) = add_constant cnst bv t in
-          let id = Cudd.Bdd.ithvar t.ctx id in
-          let sid = SMap.find v t.s2i in
-          let sid = Cudd.Bdd.ithvar t.ctx sid in
-          let bdd' = Cudd.Bdd.eq sid id in
-          Cudd.Bdd.is_leq t.bdd bdd'
+          if S.compare v bv = 0 then
+            let (t,id) = add_constant cnst bv t in
+            let id = Cudd.Bdd.ithvar t.ctx id in
+            let sid = SMap.find sv t.s2i in
+            let sid = Cudd.Bdd.ithvar t.ctx sid in
+            let bdd' = Cudd.Bdd.eq sid id in
+            Cudd.Bdd.is_leq t.bdd bdd'
+          else
+            false
         ) c
     | None ->
       false
 
-  let sat t c =
+  let sat (t: t) (c: cnstr) : bool =
     let bdd_of_bool b =
       if b then
         Cudd.Bdd.dtrue t.ctx
       else
         Cudd.Bdd.dfalse t.ctx
     in
-    let rec sat bdd = function
+    let rec sat bdd : cnstr -> 'a = function
       | #set_cnstr as cnstr ->
         constrain_set cnstr bdd t
       | `And(l,r) ->
@@ -425,6 +444,10 @@ module Make
         Cudd.Bdd.dand bdd (bdd_of_bool (sat_cardinal t c))
       | `ForAll (bv, sv, c) ->
         Cudd.Bdd.dand bdd (bdd_of_bool (sat_forall bv sv c t))
+      | `True ->
+        bdd
+      | `False ->
+        bdd_of_bool false
     in
     let bdd = sat (Cudd.Bdd.dtrue t.ctx) c in
     Cudd.Bdd.is_leq t.bdd bdd
@@ -444,10 +467,12 @@ module Make
         free = free;
       }
 
-  let add_symbols syms t =
+  let add_symbols ?level:(lvl=0) syms t =
+    assert(lvl = 0);
     List.fold_left add_symbol t syms
 
-  let remove_symbols syms t =
+  let remove_symbols ?level:(lvl=0) syms t =
+    assert(lvl = 0);
     let (t, support) = List.fold_left (fun (t, support) sym ->
         try
           let id = SMap.find sym t.s2i in
@@ -465,17 +490,18 @@ module Make
      bdd = Cudd.Bdd.exist support t.bdd
     }
 
-  let forget syms t =
+  let forget ?level:(lvl=0) syms t =
     (* only use symbols that are already in the domain *)
     let syms = List.fold_left (fun syms s -> SSet.add s syms) SSet.empty syms in
     let symsr = symbols_set t in
     let syms = SSet.inter syms symsr in
     (* remove and then readd all of the symbols *)
     let syms = SSet.elements syms in
-    let t = remove_symbols syms t in
-    add_symbols syms t
+    let t = remove_symbols ~level:lvl syms t in
+    add_symbols ~level:lvl syms t
 
-  let rename_symbols f t =
+  let rename_symbols ?level:(lvl=0) f t =
+    assert(lvl = 0);
     let map = List.fold_left (fun map (f,t) -> SMap.add f t map) SMap.empty f in
 
     let s2i = SMap.fold (fun s i s2i ->
@@ -578,7 +604,7 @@ module Make
 
   exception Unsupported_representation
 
-  let to_constraint t =
+  let to_constraint t : cnstr =
     (* get equalities *)
     let (eqs,other) = get_eq_ids t in
     (* add equalities to union find ensuring symbols are always the representative *)
@@ -627,7 +653,7 @@ module Make
     let cnstrs = List.fold_left (fun cnstrs (s,c) ->
         let bv = snd(CMap.find c t.c2i) in
         let c = C.to_constraint [(bv,c)] in
-        let cnstr = `Forall (bv, s, c) in
+        let cnstr = `ForAll (bv, s, c) in
         cnstr::cnstrs
       ) cnstrs forall in
 

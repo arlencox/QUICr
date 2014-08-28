@@ -1,50 +1,3 @@
-type 'sym string_expr = [
-  | `Var of 'sym
-  | `Const of string
-]
-
-type 'sym string_cnstr = [
-  | `Eq of 'sym string_expr * 'sym string_expr
-  | `Ne of 'sym string_expr * 'sym string_expr
-  | `And of 'sym string_cnstr * 'sym string_cnstr
-  | `Or of 'sym string_cnstr * 'sym string_cnstr
-  | `False
-  | `True
-]
-
-type 'sym num_expr = [
-  | `Var of 'sym
-  | `Const of int
-  | `Plus of 'sym num_expr * 'sym num_expr
-  | `Minus of 'sym num_expr * 'sym num_expr
-  | `Negate of 'sym num_expr
-  | `Multiply of 'sym num_expr * 'sym num_expr
-]
-
-type 'sym num_cnstr = [
-  | `And of 'sym num_cnstr * 'sym num_cnstr
-  | `Eq of 'sym num_expr * 'sym num_expr
-  | `LE of 'sym num_expr * 'sym num_expr
-  | `Lt of 'sym num_expr * 'sym num_expr
-]
-
-type 'sym set_expr = [
-  | `Union of 'sym set_expr * 'sym set_expr
-  | `Inter of 'sym set_expr * 'sym set_expr
-  | `Complement of 'sym set_expr
-  | `Var of 'sym
-  | `Empty
-  | `Universe
-]
-
-type ('sym,'se,'bc,'nc) set_cnstr = [
-  | `Eq of 'sym set_expr * 'sym set_expr
-  | `SubsetEq of 'sym set_expr * 'sym set_expr
-  | `Cardinal of 'nc
-  | `ForAll of 'sym * 'sym * 'bc
-  | `And of ('sym,'se,'bc,'nc) set_cnstr * ('sym,'se,'bc,'nc) set_cnstr
-  | `True
-]
 
 module type DomainSimp = sig
   type ctx   (** the context (mutable state) for managing the domain *)
@@ -175,8 +128,8 @@ module type Constant = sig
   type cnstr
   type t
 
-  (** returns a list of var = const pairs *)
-  val constrain: cnstr -> (sym * t) list
+  (** returns a list of var = const pairs or none if false *)
+  val constrain: cnstr -> (sym * t) list option
 
   (** returns a list of var = const pairs or none if a constraint cannot be converted *)
   val sat: cnstr -> (sym * t) list option
