@@ -348,7 +348,7 @@ struct
       let l = of_expr l in
       let r = of_expr r in
       let bdd' = Cudd.Bdd.dor (Cudd.Bdd.dnot l) r in
-      Cudd.Bdd.dand bdd' bdd'
+      Cudd.Bdd.dand bdd bdd'
 
 
   let rec constrain_cardinal (c: num_cnstr) t =
@@ -610,7 +610,7 @@ struct
     (* add equalities to union find ensuring symbols are always the representative *)
     let uf = List.fold_left (fun uf (a,b) ->
         let csa = IMap.find a t.i2cs in
-        let csb = IMap.find a t.i2cs in
+        let csb = IMap.find b t.i2cs in
         U.union csa csb uf
       ) U.empty eqs in
 
