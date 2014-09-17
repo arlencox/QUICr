@@ -47,14 +47,222 @@ type ('sym,'se,'bc,'nc) set_cnstr = [
   | `False
 ]
 
+type buf = Buffer.t
 
-let rec pp_set_cnstr pp_sym pp_se pp_bc pp_nc ff = function
-  | `Eq(a,b) -> Format.fprintf ff "%a = %a" pp_se a pp_se b
-  | `SubsetEq(a,b) -> Format.fprintf ff "%a ⊆ %a" pp_se a pp_se b
-  | `Cardinal c -> pp_nc ff c
-  | `Forall (bv,sv,bc) -> Format.fprintf ff "∀%a ∈ %a. %a" pp_sym bv pp_sym sv pp_bc bc
-  | `And (c1,c2) -> Format.fprintf ff "%a@ ∧ %a" (pp_set_cnstr pp_sym pp_se pp_bc pp_nc) c1 (pp_set_cnstr pp_sym pp_se pp_bc pp_nc) c2
-  | `True -> Format.fprintf ff "true"
+let set_cnstr_string (sym: buf -> 'sym -> unit) (se: buf -> 'se -> unit) (bc: buf -> 'bc -> unit) (nc: buf -> 'nc -> unit) (buf: buf) (c: ('sym,'se,'bc,'nc) set_cnstr) =
+  let rec to_string = function
+    | `Eq(a,b) ->
+      se buf a;
+      Buffer.add_string buf " = ";
+      se buf b
+    | `SubsetEq(a,b) ->
+      se buf a;
+      Buffer.add_string buf " ⊆ ";
+      se buf b
+    | `Cardinal c -> nc buf c
+    | `ForAll (bv,sv,c) ->
+      Buffer.add_string buf "∀";
+      sym buf bv;
+      Buffer.add_string buf " ∈ ";
+      sym buf sv;
+      Buffer.add_string buf ". ";
+      bc buf c
+    | `And (c1,c2) ->
+      to_string c1;
+      Buffer.add_string buf " ∧ ";
+      to_string c2
+    | `True ->
+      Buffer.add_string buf "true"
+    | `False ->
+      Buffer.add_string buf "false"
+  in
+  to_string c
 
-(*let rec pp_set_expr pp_sym n ff = function
-  | `Union *)
+let set_expr_string sym buf (e: 'sym set_expr) =
+  let rec to_string buf n e =
+    let buf' = Buffer.create 80 in
+    let m = match e with
+      | `Union (a,b) ->
+        to_string buf' 10 a;
+        Buffer.add_string buf' "∪";
+        to_string buf' 10 b;
+        10
+      | `Inter(a,b) ->
+        to_string buf' 20 a;
+        Buffer.add_string buf' "∩";
+        to_string buf' 20 b;
+        20
+      | `Complement a ->
+        Buffer.add_string buf' "~";
+        to_string buf' 50 a;
+        50
+      | `Var v ->
+        sym buf' v;
+        100
+      | `Empty ->
+        Buffer.add_string buf' "∅";
+        100
+      | `Universe ->
+        Buffer.add_string buf' "𝕌";
+        100
+    in
+    if m > n then
+      Buffer.add_buffer buf buf'
+    else begin
+      Buffer.add_string buf "(";
+      Buffer.add_buffer buf buf';
+      Buffer.add_string buf ")"
+    end
+  in
+  to_string buf 0 e
+
+let num_expr_string sym buf (e: 'sym num_expr) =
+  let rec to_string buf n e =
+    let buf' = Buffer.create 80 in
+    let m = match e with
+      | `Var v ->
+        sym buf' v;
+        100
+      | `Const i ->
+        Buffer.add_string buf' (string_of_int i);
+        100
+      | `Plus (a,b) ->
+        to_string buf' 10 a;
+        Buffer.add_string buf' "+";
+        to_string buf' 10 b;
+        10
+      | `Minus (a,b) ->
+        to_string buf' 10 a;
+        Buffer.add_string buf' "-";
+        to_string buf' 10 b;
+        10
+      | `Negate a ->
+        Buffer.add_string buf' "-";
+        to_string buf' 50 a;
+        50
+      | `Multiply (a,b) ->
+        to_string buf' 30 a;
+        Buffer.add_string buf' "*";
+        to_string buf' 30 b;
+        30
+    in
+    if m > n then
+      Buffer.add_buffer buf buf'
+    else begin
+      Buffer.add_string buf "(";
+      Buffer.add_buffer buf buf';
+      Buffer.add_string buf ")"
+    end
+  in
+  to_string buf 0 e
+
+let num_expr_string sym buf (e: 'sym num_expr) =
+  let rec to_string buf n e =
+    let buf' = Buffer.create 80 in
+    let m = match e with
+      | `Var v ->
+        sym buf' v;
+        100
+      | `Const i ->
+        Buffer.add_string buf' (string_of_int i);
+        100
+      | `Plus (a,b) ->
+        to_string buf' 10 a;
+        Buffer.add_string buf' "+";
+        to_string buf' 10 b;
+        10
+      | `Minus (a,b) ->
+        to_string buf' 10 a;
+        Buffer.add_string buf' "-";
+        to_string buf' 10 b;
+        10
+      | `Negate a ->
+        Buffer.add_string buf' "-";
+        to_string buf' 50 a;
+        50
+      | `Multiply (a,b) ->
+        to_string buf' 30 a;
+        Buffer.add_string buf' "*";
+        to_string buf' 30 b;
+        30
+    in
+    if m > n then
+      Buffer.add_buffer buf buf'
+    else begin
+      Buffer.add_string buf "(";
+      Buffer.add_buffer buf buf';
+      Buffer.add_string buf ")"
+    end
+  in
+  to_string buf 0 e
+
+let num_cnstr_string sym buf (c: 'sym num_cnstr) =
+  let rec to_string = function
+    | `And(c1,c2) ->
+      to_string c1;
+      Buffer.add_string buf " ∧ ";
+      to_string c2
+    | `Eq(a,b) ->
+      num_expr_string sym buf a;
+      Buffer.add_string buf " = ";
+      num_expr_string sym buf a;
+    | `LE(a,b) ->
+      num_expr_string sym buf a;
+      Buffer.add_string buf " ≤ ";
+      num_expr_string sym buf a;
+    | `Lt(a,b) ->
+      num_expr_string sym buf a;
+      Buffer.add_string buf " < ";
+      num_expr_string sym buf a;
+    in
+  to_string c
+
+let string_expr_string sym buf : 'sym string_expr -> unit = function
+  | `Var v -> sym buf v
+  | `Const c -> 
+    Buffer.add_string buf "\"";
+    Buffer.add_string buf (String.escaped c);
+    Buffer.add_string buf "\""
+
+
+let string_cnstr_string sym buf (e: 'sym string_cnstr) =
+  let rec to_string buf n e =
+    let buf' = Buffer.create 80 in
+    let m = match e with
+      | `Eq(a,b) ->
+        string_expr_string sym buf a;
+        Buffer.add_string buf " = ";
+        string_expr_string sym buf b;
+        100
+      | `Ne(a,b) ->
+        string_expr_string sym buf a;
+        Buffer.add_string buf " ≠ ";
+        string_expr_string sym buf b;
+        100
+
+      | `And(a,b) ->
+        to_string buf' 50 a;
+        Buffer.add_string buf " ∧ ";
+        to_string buf' 50 b;
+        50
+      | `Or(a,b) ->
+        to_string buf' 30 a;
+        Buffer.add_string buf " ∨ ";
+        to_string buf' 30 b;
+        30
+      | `False ->
+        Buffer.add_string buf' "false";
+        100
+      | `True ->
+        Buffer.add_string buf' "true";
+        100
+    in
+    if m > n then
+      Buffer.add_buffer buf buf'
+    else begin
+      Buffer.add_string buf "(";
+      Buffer.add_buffer buf buf';
+      Buffer.add_string buf ")"
+    end
+  in
+  to_string buf 0 e

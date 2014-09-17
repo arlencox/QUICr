@@ -1,4 +1,7 @@
-module Make(S: Interface.Sym) : Interface.Constant with type sym = S.t = struct
+module Make(S: Interface.Sym)
+  : Interface.Constant
+    with type sym = S.t
+     and type cnstr = S.t Commands.string_cnstr = struct
   type sym = S.t
   type cnstr = sym Commands.string_cnstr
   type t = string
