@@ -3,7 +3,10 @@ open BDDBasic
 open StringConst
 (*open CardinalInterval*)
 
-module Sym = String
+module Sym = struct
+  include String
+  let to_string s = s
+end
 module StrC = StringConst.Make(Sym)
 module SetD = BDDBasic.Make(Sym)(StrC)
 
@@ -59,6 +62,30 @@ let _ =
   let t = SetD.forget ["c"] t in
   Format.printf "forget c:@.";
   Format.printf "%a@." pp t;
+
+  (* check satisfiability *)
+  Format.printf "check if implies b = d:@.";
+  Format.printf "%b@." (SetD.sat t (`Eq(`Var "b", `Var "d")));
+
+  (* create new domain *)
+  let t' = SetD.top ctx (SetD.symbols t) in
+  Format.printf "new domain:@.";
+  Format.printf "%a@." pp t';
+
+  (* constrain new domain *)
+  let t' = SetD.constrain (`Eq(`Var "b", `Var "d")) t' in
+  Format.printf "new domain b = d:@.";
+  Format.printf "%a@." pp t';
+
+  (* join the two domains *)
+  let t'' = SetD.join ["b","b","a"; "d","d","c"] t t' in
+  Format.printf "joined:@.";
+  Format.printf "%a@." pp t'';
+
+  (* meet the two domains *)
+  let t'' = SetD.meet ["b","d","b"; "d","c","d"] t t' in
+  Format.printf "met:@.";
+  Format.printf "%a@." pp t'';
 
   
   ()

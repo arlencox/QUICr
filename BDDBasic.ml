@@ -66,6 +66,29 @@ struct
     sing: SSet.t;
   }
 
+  let dump t =
+    Format.printf "==================================@.";
+    Format.printf "c2i:@.";
+    CMap.iter (fun c (i, s) ->
+        Format.printf "  ?: %d %s@." i (S.to_string s)
+      ) t.c2i;
+    Format.printf "s2i:@.";
+    SMap.iter (fun s i ->
+        Format.printf "  %s: %d@." (S.to_string s) i
+      ) t.s2i;
+    Format.printf "i2cs:@.";
+    IMap.iter (fun i cs ->
+        let s = match cs with
+          | Const c -> "const ?"
+          | Symbol s -> "symbol "^(S.to_string s)
+        in
+        Format.printf "  %d: %s@." i s
+      ) t.i2cs;
+    Format.printf "bdd:@.";
+    Format.printf "  %a@." (Cudd.Bdd.print Format.pp_print_int) t.bdd;
+    Format.printf "==================================@."
+
+
   let init () = Cudd.Man.make_d ()
 
   let add_constant c bv t =
@@ -172,18 +195,15 @@ struct
   let do_rename imap bdd =
     let max = fst (IMap.max_binding imap) in
     let mapping = Array.make (max+1) (-1) in
-    IMap.iter (fun fid tid ->
-        mapping.(fid) <- tid
-      ) imap;
-    let supp = snd (Array.fold_left (fun (i,supp) tid ->
-        let supp = if tid < 0 then
-            Cudd.Bdd.dand (Cudd.Bdd.ithvar (Cudd.Bdd.manager bdd) i) supp
-          else
-            supp in
-        (i+1, supp)
-      ) (0, Cudd.Bdd.dtrue (Cudd.Bdd.manager bdd)) mapping) in
-    let bdd = Cudd.Bdd.exist supp bdd in
-    Cudd.Bdd.permute bdd mapping
+    let supp = IMap.fold (fun fid tid supp ->
+        mapping.(fid) <- tid;
+        Cudd.Bdd.dand (Cudd.Bdd.ithvar (Cudd.Bdd.manager bdd) fid) supp
+      ) imap (Cudd.Bdd.dtrue (Cudd.Bdd.manager bdd)) in
+    let to_remove = Cudd.Bdd.support_diff (Cudd.Bdd.support bdd) supp in
+    let bdd = Cudd.Bdd.exist to_remove bdd in
+    let bdd = Cudd.Bdd.permute bdd mapping in
+    bdd
+
 
   let upper_bound op is_widening mapping a b =
     let (a,b,c,imapping) = constant_mapping is_widening a b in
@@ -202,6 +222,12 @@ struct
         let c = {c with s2i; i2cs; free} in
         ((ia,ib,ic)::imapping, c)
       ) (imapping,c) mapping in
+
+    (* inspect mapping *)
+    (*Format.printf "mapping:@.";
+    List.iter (fun (ia,ib,ic) ->
+        Format.printf "  %d %d %d@." ia ib ic
+      ) imapping;*)
 
     (* construct a proper map *)
     let (amap,bmap) = List.fold_left (fun (amap,bmap) (ia,ib,ic) ->
