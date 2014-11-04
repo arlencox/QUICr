@@ -1,7 +1,9 @@
 .PHONY: all clean
 
+OPTIONS=-use-ocamlfind -cflag -annot
+
 all:
-	ocamlbuild -use-ocamlfind test.d.byte test.native
+	ocamlbuild $(OPTIONS) test.d.byte test.native
 
 clean:
 	ocamlbuild -clean

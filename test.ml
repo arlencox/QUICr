@@ -1,4 +1,5 @@
 open BDDBasic
+open BDDBasic2
   
 open StringConst
 (*open CardinalInterval*)

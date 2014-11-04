@@ -124,6 +124,7 @@ module type Sym = sig
   val to_string: t -> string
 end
 
+
 module type Constant = sig
   type sym
   type cnstr
@@ -138,4 +139,30 @@ module type Constant = sig
   val to_constraint: (sym * t) list -> cnstr
 
   val compare: t -> t -> int
+end
+
+module type NonRel = sig
+  type sym
+  type cnstr
+  type t
+
+  val constrain: cnstr -> (sym * t) list option
+
+  val sat: cnstr -> (sym * t) list option
+
+  val top: t
+  val bottom: t
+
+  val is_top: t -> bool
+
+  val meet: t -> t -> t
+  val join: t -> t -> t
+  val widening: t -> t -> t
+  val le: t -> t -> bool
+
+  val to_constraint: (sym * t) list -> cnstr
+
+  module Const : Constant with type sym = sym and type cnstr = cnstr
+
+  val constant : t -> Const.t option
 end

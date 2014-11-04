@@ -41,7 +41,7 @@ type ('sym,'se,'bc,'nc) set_cnstr = [
   | `Eq of 'se * 'se
   | `SubsetEq of 'se * 'se
   | `Cardinal of 'nc
-  | `ForAll of 'sym * 'sym * 'bc
+  | `ForAll of 'sym * 'sym * 'bc (* (a,b,c)  Forall a in b.  c[a] *)
   | `And of ('sym,'se,'bc,'nc) set_cnstr * ('sym,'se,'bc,'nc) set_cnstr
   | `True
   | `False
