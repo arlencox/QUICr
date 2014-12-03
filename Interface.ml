@@ -145,15 +145,22 @@ module type NonRel = sig
   type sym
   type cnstr
   type t
+  type const
 
+  (** returns Some (base symbol and value) if it can be overapproximated.  None
+      if it cannot be overapproximated. *)
   val constrain: cnstr -> (sym * t) list option
 
+  (** returns Some (base symbol and value) if it can be underapproximated. None
+      if it cannot be underapproximated. *)
   val sat: cnstr -> (sym * t) list option
 
   val top: t
   val bottom: t
 
   val is_top: t -> bool
+
+  val is_bottom: t -> bool
 
   val meet: t -> t -> t
   val join: t -> t -> t
@@ -162,7 +169,9 @@ module type NonRel = sig
 
   val to_constraint: (sym * t) list -> cnstr
 
-  module Const : Constant with type sym = sym and type cnstr = cnstr
+  val constant : t -> const option
 
-  val constant : t -> Const.t option
+  val of_constant : const -> t
+
+  val compare_const : const -> const -> int
 end

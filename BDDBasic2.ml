@@ -11,7 +11,10 @@ module Make
         S.t Commands.num_cnstr) Commands.set_cnstr
   =
 struct
-  module C = B.Const
+  module C = struct
+    type t = B.const
+    let compare = B.compare_const
+  end
 
   type ctx = Cudd.Man.d Cudd.Man.t
 
@@ -464,21 +467,23 @@ struct
       t
 
   let constrain_forall bv sv c t =
-    match C.constrain c with
+    match B.constrain c with
     | Some c ->
       List.fold_left (fun t (v,cnst) ->
           if S.compare v bv = 0 then
-            let (t,id) = add_constant cnst bv t in
-            let id = Cudd.Bdd.ithvar t.ctx id in
-            let sid = SMap.find sv t.s2i in
-            let sid = Cudd.Bdd.ithvar t.ctx sid in
-            let bdd' = Cudd.Bdd.eq sid id in
-            { t with bdd = Cudd.Bdd.dand t.bdd bdd' }
+            let res = try
+                let (b, sym) = SMap.find sv t.base in
+                (B.meet b cnst, sym)
+              with Not_found ->
+                (cnst, v)
+            in
+            {t with base = SMap.add sv res t.base}
           else
             t
         ) t c
     | None ->
       {t with bdd = Cudd.Bdd.dfalse t.ctx}
+
 
 
   let rec constrain (cnstr: cnstr) a =
@@ -508,19 +513,25 @@ struct
     | _ ->
       false
 
-
-
-  let sat_forall (bv: sym) (sv: sym) (c: C.cnstr) (t:t) : bool =
-    match C.sat c with
+  let sat_forall (bv: sym) (sv: sym) (c: B.cnstr) (t:t) : bool =
+    match B.sat c with
     | Some c ->
       List.for_all (fun (v,cnst) ->
           if S.compare v bv = 0 then
-            let (t,id) = add_constant cnst bv t in
-            let id = Cudd.Bdd.ithvar t.ctx id in
-            let sid = SMap.find sv t.s2i in
-            let sid = Cudd.Bdd.ithvar t.ctx sid in
-            let bdd' = Cudd.Bdd.eq sid id in
-            Cudd.Bdd.is_leq t.bdd bdd'
+            match B.constant cnst with
+            | Some const ->
+              let (t,id) = add_constant const bv t in
+              let id = Cudd.Bdd.ithvar t.ctx id in
+              let sid = SMap.find sv t.s2i in
+              let sid = Cudd.Bdd.ithvar t.ctx sid in
+              let bdd' = Cudd.Bdd.eq sid id in
+              Cudd.Bdd.is_leq t.bdd bdd'
+            | None ->
+              let tgt = try
+                fst (SMap.find sv t.base)
+              with Not_found ->
+                B.top in
+              B.le tgt cnst
           else
             false
         ) c
@@ -528,6 +539,7 @@ struct
       false
 
   let sat (t: t) (c: cnstr) : bool =
+    let t = reduce_b_to_s t in
     let bdd_of_bool b =
       if b then
         Cudd.Bdd.dtrue t.ctx
@@ -749,13 +761,19 @@ struct
             raise Unsupported_representation
       ) uf (cnstrs,[]) in
 
-    (* TODO: show constant constraints.  Need a way to generate symbols *)
     let cnstrs = List.fold_left (fun cnstrs (s,c) ->
         let bv = snd(CMap.find c t.c2i) in
-        let c = C.to_constraint [(bv,c)] in
+        let c = B.of_constant c in
+        let c = B.to_constraint [(bv,c)] in
         let cnstr = `ForAll (bv, s, c) in
         cnstr::cnstrs
       ) cnstrs forall in
+
+    let cnstrs = SMap.fold (fun sv (c,bv) cnstrs ->
+        let cnstr = B.to_constraint [bv,c] in
+        let cnstr = `ForAll (bv, sv, cnstr) in
+        cnstr::cnstrs
+      ) t.base cnstrs in
 
     let cnstrs = SSet.fold (fun s cnstrs ->
         let cnstr = `Cardinal (`Eq(`Var s, `Const 1)) in
