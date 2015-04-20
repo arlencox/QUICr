@@ -6,4 +6,5 @@ if(y in x) {
 } else {
   d = d U {y};
 };
-assert(c U d <= a U b);
+assert(c <= a U b);
+assert(d <= ~(a U b));
