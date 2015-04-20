@@ -1,0 +1,9 @@
+x = a U b;
+c = {};
+d = {};
+if(y in x) {
+  c = c U {y};
+} else {
+  d = d U {y};
+};
+assert(c U d <= a U b);

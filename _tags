@@ -1,0 +1,6 @@
+<bdd-full/*>: for-pack(BDDFull)
+<logger/*>: for-pack(Logger)
+<util/*>: for-pack(Util)
+<sdsl/*>: for-pack(SDSL)
+<Main.*>: package(str)
+<*> or <bdd-full/*>: package(mlbdd)

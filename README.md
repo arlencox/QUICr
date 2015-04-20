@@ -25,7 +25,7 @@ strucutre.  This means that they have a normal form that may not be optimal,
 but they are quite general and precise.  In this space, we plan to implement
 the following abstractions:
 
-#### Simple BDD-based Set Abstraction
+#### BDD-Full: Simple BDD-based Set Abstraction
 
 This directly implements a set abstraction using a BDDs and, or, and not
 operations to represent set intersection, union, and complement respectively.
@@ -139,8 +139,11 @@ e ::= v                          // set variable
     | { v }                      // singleton set
     | e U e                      // union
     | e U+ e                     // disjoint union
+    | e \ e                      // set difference
     | e ^ e                      // intersection
+    | ~e                         // set complement
 
 c ::= e = e                      // set equality
     | e <= e                     // subset or equality
+    | v in e                     // element containment
 ```

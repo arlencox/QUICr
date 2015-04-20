@@ -5,6 +5,7 @@ type 'sym e =
   | Union of 'sym e * 'sym e
   | Inter of 'sym e * 'sym e
   | Diff of 'sym e * 'sym e
+  | Comp of 'sym e
   | Var of 'sym
   | Sing of 'sym
 
@@ -13,6 +14,7 @@ type 'sym t =
   | SubEq of 'sym e * 'sym e
   | In of 'sym * 'sym e
   | And of 'sym t * 'sym t
+  | Not of 'sym t
   | True
   | False
 
@@ -26,6 +28,7 @@ let prec_e = function
   | Inter _ -> 70
   | Diff _ -> 80
   | DisjUnion _ -> 90
+  | Comp _ -> 95
   | Var _
   | Sing _
   | Empty
@@ -40,6 +43,7 @@ let rec pp_noparen_e pp_sym ff t =
   | Union (a,b) -> Format.fprintf ff "%a ∪ %a" pprec a pprec b
   | Inter (a,b) -> Format.fprintf ff "%a ∩ %a" pprec a pprec b
   | Diff (a,b) -> Format.fprintf ff "%a ∖ %a" pprec a pprec b
+  | Comp a -> Format.fprintf ff "~%a" pprec a
   | Var v -> pp_sym ff v
   | Sing v -> Format.fprintf ff "{%a}" pp_sym v
 
@@ -56,6 +60,7 @@ let rec pp pp_sym ff t =
   | SubEq (a,b) -> Format.fprintf ff "%a ⊆ %a" ppe a ppe b
   | In (a,b) -> Format.fprintf ff "%a ∈ %a" pp_sym a ppe b
   | And (a,b) -> Format.fprintf ff "%a ∧ %a" (pp pp_sym) a (pp pp_sym) b
+  | Not a -> Format.fprintf ff "(not %a)" (pp pp_sym) a
   | True -> Format.fprintf ff "true"
   | False -> Format.fprintf ff "false"
 
@@ -73,3 +78,22 @@ let to_string pp_sym t =
   Format.pp_print_flush ff ();
   Buffer.contents b
 
+let rec map_symbol_e f = function
+  | Empty -> Empty
+  | Universe -> Universe
+  | DisjUnion (a,b) -> DisjUnion(map_symbol_e f a, map_symbol_e f b)
+  | Union (a,b) -> Union(map_symbol_e f a, map_symbol_e f b)
+  | Inter (a,b) -> Inter(map_symbol_e f a, map_symbol_e f b)
+  | Diff (a,b) -> Diff(map_symbol_e f a, map_symbol_e f b)
+  | Comp a -> Comp (map_symbol_e f a)
+  | Var v -> Var (f v)
+  | Sing v -> Sing (f v)
+
+let rec map_symbol f = function
+  | Eq(a,b) -> Eq(map_symbol_e f a, map_symbol_e f b)
+  | SubEq(a,b) -> SubEq(map_symbol_e f a, map_symbol_e f b)
+  | In(a,b) -> In(f a, map_symbol_e f b)
+  | And(a,b) -> And(map_symbol f a, map_symbol f b)
+  | Not a -> Not (map_symbol f a)
+  | True -> True
+  | False -> False

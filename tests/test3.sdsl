@@ -1,0 +1,29 @@
+// result is initially empty
+res = {};
+
+// create iteration sets
+fout = {};
+fin = s;
+
+// start loop
+while(*) {
+  // project out x, fin2
+  kill x;
+  kill fin2;
+
+  // get x from fin
+  assume(fin = fin2 U+ {x});
+  fin = fin2;
+  kill fin2;
+
+  // run body of loop
+  if(x in exc) { } else {
+    res = res U x;
+  };
+  
+  // close the loop
+  fout = fout U+ {x};
+};
+assume(fin = {});
+assume(fout = s);
+assert(res = s \ exc);
