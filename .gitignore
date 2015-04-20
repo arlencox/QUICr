@@ -1,1 +1,3 @@
 _build
+Main.d.byte
+Main.native
