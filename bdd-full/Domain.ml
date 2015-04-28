@@ -287,3 +287,9 @@ let combine q t =
   List.fold_left (fun t (s1, s2) ->
         constrain (L.Eq (L.Var s1, L.Var s2)) t
     ) t (q.L.get_eqs ())
+
+let pp_print pp_sym ff t =
+  let s = serialize t in
+  LogicSymbolicSet.pp pp_sym ff s
+
+let pp_debug = pp_print

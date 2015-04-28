@@ -80,6 +80,14 @@ module type Domain = sig
       domain) to strengthen this domain *)
   val combine: query -> t -> t
 
+  (** [pp_debug s f t] pretty print the domain's internal structure using [s]
+      to format symbols to the formatter [f] *)
+  val pp_debug: (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
+
+  (** [pp_print s f t] pretty print the abstract state [s] to format symbols to
+      the formatter [f] *)
+  val pp_print: (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
+
 end
 
 module type DomainRenamable = sig

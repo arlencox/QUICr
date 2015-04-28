@@ -78,8 +78,17 @@ module Make(D: Interface.Domain
 = struct
 
   let print_state renv state =
-    let c = D.serialize state in
-    let c = L.map_symbol (Hashtbl.find renv) c in
+    (*let c = D.serialize state in*)
+    (*let c = L.map_symbol (Hashtbl.find renv) c in*)
+    let pp_sym ff s =
+      try
+        let n = Hashtbl.find renv s in
+        Format.pp_print_string ff n
+      with Not_found ->
+        Format.pp_print_string ff "%";
+        Format.pp_print_int ff s
+    in
+
     if !state_brace then begin
       Format.print_cut ();
       Format.open_vbox 0;
@@ -87,7 +96,8 @@ module Make(D: Interface.Domain
       Format.print_string !color_inv;
       Format.print_string "[";
       Format.print_cut ();
-      L.pp Format.pp_print_string Format.std_formatter c;
+      D.pp_print pp_sym Format.std_formatter state;
+      (*L.pp Format.pp_print_string Format.std_formatter c;*)
       Format.close_box ();
       Format.print_cut ();
       Format.print_string "]";
@@ -98,7 +108,8 @@ module Make(D: Interface.Domain
       Format.open_vbox 2;
       Format.print_string "  ";
       Format.print_string !color_inv;
-      L.pp Format.pp_print_string Format.std_formatter c;
+      D.pp_print pp_sym Format.std_formatter state;
+      (*L.pp Format.pp_print_string Format.std_formatter c;*)
       Format.print_string (Color.color false Color.Reset);
       Format.close_box ()
     end

@@ -1,0 +1,14 @@
+assume(x = a U b);
+assume(c = {});
+assume(d = {});
+if(y in x) {
+  assume(e = c U {y});
+  kill c;
+  assume(f = {});
+} else {
+  assume(f = d U {y});
+  kill d;
+  assume(e = {});
+};
+assert(e <= a U b);
+assert(f <= ~(a U b));

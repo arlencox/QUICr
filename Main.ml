@@ -27,6 +27,8 @@ let domains = [
 
 (** list of domain combinators to enable *)
 let combinators = [
+
+  (* logger combinator *)
   ("-logger", Arg.String (fun s ->
        let module L = (struct
          let file = s
@@ -34,7 +36,22 @@ let combinators = [
        let module D = (val pop ()) in
        let module Log = Logger.Domain.Make(L)(D) in
        push (module Log)
-     ), "<file> Log domain interactions to file")
+     ), "<file> Log domain interactions to file");
+
+  (* packer combinator *)
+  ("-pack", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Packer.Domain.Make(D) in
+       push (module P)
+     ), " Pack variables into multiple domain instances");
+
+  (* debugger combinator *)
+  ("-debug", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = DebugPrint.Domain.Make(D) in
+       push (module P)
+     ), " Use debug printer");
+
 ]
 
 let usage =

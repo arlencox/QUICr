@@ -173,4 +173,11 @@ module Make(L: L)(D: Interface.Domain
     Format.fprintf t.c.ff "@]@.";
     res
 
+  let pp_print pp_sym ff t =
+    D.pp_print pp_sym ff t.t
+
+  let pp_debug pp_sym ff t =
+    D.pp_print pp_sym ff t.t
+
+
 end
