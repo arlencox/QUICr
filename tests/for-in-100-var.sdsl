@@ -1,0 +1,77 @@
+x2 = x1;
+x4 = x3;
+x6 = x5;
+x8 = x7;
+x10 = x9;
+x12 = x11;
+x14 = x13;
+x16 = x15;
+x18 = x17;
+x20 = x19;
+x22 = x21;
+x24 = x23;
+x26 = x25;
+x28 = x27;
+x30 = x29;
+x32 = x31;
+x34 = x33;
+x36 = x35;
+x38 = x37;
+x40 = x39;
+x42 = x41;
+x44 = x43;
+x46 = x45;
+x48 = x47;
+x50 = x49;
+x52 = x51;
+x54 = x53;
+x56 = x55;
+x58 = x57;
+x60 = x59;
+x62 = x61;
+x64 = x63;
+x66 = x65;
+x68 = x67;
+x70 = x69;
+x72 = x71;
+x74 = x73;
+x76 = x75;
+x78 = x77;
+x80 = x79;
+x82 = x81;
+x84 = x83;
+x86 = x85;
+x88 = x87;
+x90 = x89;
+x92 = x91;
+x94 = x93;
+x96 = x95;
+x98 = x97;
+x100 = x99;
+
+// result is initially empty
+res = {};
+
+// create iteration sets
+fout = {};
+fin = s;
+
+// start loop
+while(*) {
+  // project out x
+  kill x;
+  // get x from fin
+  assume(x in fin);
+  fin = fin \ {x};
+
+  // run body of loop
+  if(x in exc) { } else {
+    res = res U x;
+  };
+  
+  // close the loop
+  fout = fout U+ {x};
+};
+assume(fin = {});
+assume(fout = s);
+assert(res = s \ exc);
