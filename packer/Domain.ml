@@ -1,6 +1,6 @@
 module L = LogicSymbolicSet
 
-let debug = true
+let debug = false
 
 module Make (D: Interface.Domain
              with type sym = int
@@ -38,13 +38,18 @@ module Make (D: Interface.Domain
     pack: SymSets.t;
   }
 
-  type t = ctx * pack option
+  type t = 
+    | Bottom of ctx
+    | Top of ctx
+    | Dom of pack
 
-  let pp_print pp_sym ff (ctx,t) =
+  let pp_print pp_sym ff t =
     match t with
-    | None ->
+    | Bottom ctx ->
       Format.fprintf ff "false"
-    | Some t ->
+    | Top ctx ->
+      Format.fprintf ff "true"
+    | Dom t ->
       let first = ref true in
       SymMap.iter (fun _ d ->
           if !first then
@@ -54,11 +59,13 @@ module Make (D: Interface.Domain
           D.pp_print pp_sym ff d
         ) t.doms
 
-  let pp_debug pp_sym ff (ctx,t) =
+  let pp_debug pp_sym ff t =
     match t with
-    | None ->
-      Format.fprintf ff "bottom"
-    | Some t ->
+    | Bottom ctx ->
+      Format.fprintf ff "false"
+    | Top ctx ->
+      Format.fprintf ff "true"
+    | Dom t ->
       Format.fprintf ff "@[<v 0>@[<h>[%a]@]" (Format.pp_print_list ~pp_sep:Format.pp_print_space pp_sym) (SymSets.reps t.pack);
       SymMap.iter (fun r d ->
           Format.fprintf ff "@,@[<v 2>%a: " pp_sym r;
@@ -94,32 +101,31 @@ module Make (D: Interface.Domain
       ) p.doms
 
   let check_t ?msg:msg = function
-    | (ctx, None) -> ()
-    | (ctx, Some p) -> 
+    | Bottom ctx -> ()
+    | Top ctx -> ()
+    | Dom p ->
       match msg with
       | None -> check p
       | Some msg -> check ~msg:msg p
 
   let init = D.init
 
-  let top ctx =
-    let t = (ctx, Some {doms = SymMap.empty; pack = SymSets.empty}) in
-    if debug then check_t ~msg:"top" t;
-    t
+  let top ctx = Top ctx
 
-  let bottom ctx =
-    let t = (ctx, None) in
-    if debug then check_t ~msg:"bottom" t;
-    t
+  let bottom ctx = Bottom ctx
 
-  let context (ctx,t) = ctx
+  let context = function
+    | Top ctx
+    | Bottom ctx -> ctx
+    | Dom p ->
+      D.context @@ snd @@ SymMap.choose p.doms
 
-  let symbols (ctx,t) =
-    match t with
-    | None -> []
-    | Some t ->
-      if debug then check ~msg:"symbols" t;
-      SymSets.fold (fun s _ l -> s::l) t.pack []
+  let symbols = function
+    | Top _ -> []
+    | Bottom _ -> []
+    | Dom p ->
+      if debug then check ~msg:"symbols" p;
+      SymSets.fold (fun s _ l -> s::l) p.pack []
 
   (* add symbol to pack manager.  It may or may not exist *)
   let add ctx s ({pack; doms} as p) =
@@ -222,121 +228,137 @@ module Make (D: Interface.Domain
     | L.False -> SymSet.empty
 
 
-  let constrain cnstr (ctx,t) =
-    match t with
-    | None -> (ctx, None)
-    | Some pack ->
-      if debug then check ~msg:"constrain" pack;
+  let constrain cnstr t =
+    let do_constrain ctx p =
+      if debug then check ~msg:"constrain" p;
       let syms = SymSet.elements (syms cnstr) in
-      let pack = merge_pack_list ctx syms pack in
-      if debug then assert (List.for_all (fun s -> SymSets.mem s pack.pack) syms);
+      let p = merge_pack_list ctx syms p in
+      if debug then assert (List.for_all (fun s -> SymSets.mem s p.pack) syms);
       let t = match syms with
       | [] ->
-        if SymMap.is_empty pack.doms then
+        if SymMap.is_empty p.doms then
           let d = D.top ctx in
           let d = D.constrain cnstr d in
-          if D.is_bottom d then (ctx, None) else (ctx, Some pack)
+          if D.is_bottom d then
+            Bottom ctx
+          else
+            Top ctx
         else
           let doms = SymMap.fold (fun srep d doms ->
               SymMap.add srep (D.constrain cnstr d) doms
-            ) pack.doms SymMap.empty in
-          (ctx, Some { pack with doms })
+            ) p.doms SymMap.empty in
+          Dom { p with doms }
       | sym::_ ->
-        let doms = pack.doms in
-        let pack = pack.pack in
+        let doms = p.doms in
+        let pack = p.pack in
         let srep = SymSets.rep sym pack in
         let d = try SymMap.find srep doms with Not_found -> D.top ctx in
         let d = D.constrain cnstr d in
         let doms = SymMap.add srep d doms in
-        (ctx, Some { pack; doms })
+        Dom { pack; doms }
       in
       if debug then check_t ~msg:"constrain end" t;
       t
+    in
+    match t with
+    | Bottom _ -> t
+    | Top ctx ->
+      do_constrain ctx {pack=SymSets.empty; doms=SymMap.empty}
+    | Dom p ->
+      let ctx = D.context @@ snd @@ SymMap.choose p.doms in
+      do_constrain ctx p
       
-  exception Bottom
+  exception IsBottom
 
   let rec conjoin = function
     | [] -> L.True
     | [h] -> h
     | h::t -> L.And(h,conjoin t)
 
-  let serialize ((ctx,t): t) : output =
-    match t with
-    | None -> L.True
-    | Some t ->
+  let serialize = function
+    | Bottom _ -> L.False
+    | Top _ -> L.True
+    | Dom t ->
       if debug then check ~msg:"serialize" t;
       try
         let cs = SymMap.fold (fun _ d l ->
             if D.is_bottom d then
-              raise Bottom
+              raise IsBottom
             else
               let c = D.serialize d in
               c::l
           ) t.doms [] in
         conjoin cs
-      with Bottom ->
+      with IsBottom ->
         L.True
 
-  let is_bottom (ctx,o) =
-    match o with
-    | None -> true
-    | Some t ->
-      if debug then check ~msg:"is_bottom" t;
+  let is_bottom t =
+    match t with
+    | Bottom _ -> true
+    | Top _ -> false
+    | Dom p ->
+      if debug then check ~msg:"is_bottom" p;
       SymMap.exists (fun r d ->
           D.is_bottom d
-        ) t.doms
+        ) p.doms
 
-  let sat (ctx, t) cnstr =
+  let sat t cnstr =
     match t with
-    | None -> true
-    (*| Some pack when is_bottom (ctx, t) -> true*)
-    | Some pack ->
-      if debug then check ~msg:"sat" pack;
+    | Bottom _ -> true
+    | Top ctx -> D.sat (D.top ctx) cnstr
+    | Dom p ->
+      if debug then check ~msg:"sat" p;
       let syms = SymSet.elements (syms cnstr) in
-      let pack = merge_pack_list ctx syms pack in
+      let ctx = SymMap.choose p.doms |> snd |> D.context in
+      let p = merge_pack_list ctx syms p in
       match syms with
       | [] ->
         SymMap.exists (fun _ d ->
-            D.sat d cnstr) pack.doms
+            D.sat d cnstr) p.doms
       | sym::_ ->
-        let doms = pack.doms in
-        let pack = pack.pack in
+        let doms = p.doms in
+        let pack = p.pack in
         let srep = SymSets.rep sym pack in
-        let d = try SymMap.find srep doms with Not_found -> D.top ctx in
+        let d = try SymMap.find srep doms with Not_found -> assert false in
         D.sat d cnstr
 
   let forget ctx sym t =
-    if debug then check ~msg:"forget" t;
-    let pack = t.pack in
-    let doms = t.doms in
-    (* forget symbol within pack *)
-    let r = SymSets.rep sym pack in
-    let doms = try SymMap.add r (SymMap.find r doms |> D.forget [sym]) doms with Not_found -> doms in
-    (* modify the packs if necessary *)
-    let (pack,res) = SymSets.remove sym pack in
-    let doms = match res with
-    | SymSets.NoRepresentative ->
-      SymMap.remove sym doms
-    | SymSets.SameRepresentative ->
-      doms
-    | SymSets.NewRepresentative sym' ->
-      try
-        let d = SymMap.find sym doms in
-        let doms = SymMap.remove sym doms in
-        SymMap.add sym' d doms
-      with Not_found ->
-        SymMap.remove sym doms
-    in
-    let t = { pack; doms } in
-    if debug then check ~msg:"forget end" t;
-    t
-
-  let forget syms (ctx,t) =
     match t with
-    | None ->
-      (ctx,None)
-    | Some t ->
-      (ctx, Some (List.fold_left (fun t sym -> forget ctx sym t) t syms))
+    | Bottom _
+    | Top _ -> t
+    | Dom t ->
+      if debug then check ~msg:"forget" t;
+      let pack = t.pack in
+      let doms = t.doms in
+      (* forget symbol within pack *)
+      let r = SymSets.rep sym pack in
+      let doms = try SymMap.add r (SymMap.find r doms |> D.forget [sym]) doms with Not_found -> doms in
+      (* modify the packs if necessary *)
+      let (pack,res) = SymSets.remove sym pack in
+      let doms = match res with
+        | SymSets.NoRepresentative ->
+          SymMap.remove sym doms
+        | SymSets.SameRepresentative ->
+          doms
+        | SymSets.NewRepresentative sym' ->
+          try
+            let d = SymMap.find sym doms in
+            let doms = SymMap.remove sym doms in
+            SymMap.add sym' d doms
+          with Not_found ->
+            SymMap.remove sym doms
+      in
+      if SymMap.is_empty doms then
+        Top ctx
+      else begin
+        let t = Dom { pack; doms } in
+        if debug then check_t ~msg:"forget end" t;
+        t
+      end
+
+  let forget syms t =
+    let ctx = context t in
+    List.fold_left (fun t sym -> forget ctx sym t) t syms
 
   let unify_packs ctx a b =
     if a.pack == b.pack then
@@ -357,36 +379,49 @@ module Make (D: Interface.Domain
       in
       (pack, do_changes a ad, do_changes b bd)
 
-  let bound op (ctx,a) (_,b) =
+  let bound_packs op a b =
+    let ctx = SymMap.choose a.doms |> snd |> D.context in
+    let (pack,adoms,bdoms) = unify_packs ctx a b in
+    Dom {
+      pack;
+      doms = SymMap.merge (fun k d1 d2 ->
+          match d1,d2 with
+          | Some d1, Some d2 -> Some (op d1 d2)
+          | Some d1, None -> Some (op d1 (D.top ctx))
+          | None, Some d2 -> Some (op (D.top ctx) d2)
+          | _ -> assert false
+        ) adoms bdoms;
+    }
+
+  let upper_bound op a b =
     match a, b with
-    | None, o
-    | o, None -> (ctx, o)
-    | Some a, Some b ->
-      let (pack,adoms,bdoms) = unify_packs ctx a b in
-      (ctx, Some {
-          pack;
-          doms = SymMap.merge (fun k d1 d2 ->
-              match d1,d2 with
-              | Some d1, Some d2 -> Some (op d1 d2)
-              | Some d1, None -> Some (op d1 (D.top ctx))
-              | None, Some d2 -> Some (op (D.top ctx) d2)
-              | _ -> assert false
-            ) adoms bdoms;
-        })
+    | Bottom _, o
+    | o, Bottom _ -> o
+    | (Top _ as o), _
+    | _, (Top _ as o) -> o
+    | Dom a, Dom b ->
+      bound_packs op a b
 
-  let join = bound D.join
+  let lower_bound op a b =
+    match a, b with
+    | (Bottom _ as o), _
+    | _, (Bottom _ as o) -> o
+    | Top _, o
+    | o, Top _ -> o
+    | Dom a, Dom b ->
+      bound_packs op a b
 
-  let widening = bound D.widening
 
-  let meet = bound D.meet
+  let join = upper_bound D.join
+
+  let widening = upper_bound D.widening
+
+  let meet = lower_bound D.meet
     
   exception Not_le
 
-  let le (ctx, a) (_, b) =
-    match a, b with
-    | None, _ -> true
-    | Some a, None -> is_bottom (ctx, Some a)
-    | Some a, Some b ->
+  let le a b =
+    let do_le ctx a b =
       let (_pack, adoms, bdoms) = unify_packs ctx a b in
       try
         ignore(SymMap.merge (fun k d1 d2 ->
@@ -401,6 +436,19 @@ module Make (D: Interface.Domain
         true
       with Not_le ->
         false
+    in
+    match a, b with
+    | Bottom _, _ -> true
+    | _, Top _ -> true
+    | Top _, Bottom _ -> false
+    | Top ctx, Dom p ->
+      do_le ctx {pack=SymSets.empty; doms=SymMap.empty} p
+    | Dom a, Dom b ->
+      let ctx = SymMap.choose a.doms |> snd |> D.context in
+      do_le ctx a b
+    | Dom a, Bottom _ ->
+      is_bottom (Dom a)
+
 
   let rename_symbol o n p =
     let r = SymSets.rep o p.pack in
@@ -427,26 +475,27 @@ module Make (D: Interface.Domain
     { doms; pack }
 
 
-  let rename_symbols sym_map (ctx,t) =
+  let rename_symbols sym_map t =
     match t with
-    | None -> (ctx,t)
-    | Some p ->
+    | Bottom _
+    | Top _ -> t
+    | Dom p ->
       if debug then check ~msg:"rename_symbols" p;
       let p = List.fold_left (fun p (o,n) ->
           rename_symbol o n p
         ) p sym_map in
-      let t = (ctx, Some p) in
-      if debug then check_t ~msg:"rename_symbols end" t;
-      t
+      if debug then check ~msg:"rename_symbols end" p;
+      Dom p
 
-  let query (ctx,o) =
+  let query o =
     match o with
-    | None ->
+    | Top _
+    | Bottom _ ->
       {
         L.get_eqs = (fun () -> []);
         L.get_eqs_sym = (fun s -> []);
       }
-    | Some t ->
+    | Dom t ->
       {
         L.get_eqs = (fun () ->
             SymMap.bindings t.doms |>

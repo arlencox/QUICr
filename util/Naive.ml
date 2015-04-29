@@ -1,4 +1,4 @@
-let debug = true
+let debug = false
 
 module type Comparable = sig
   type t
