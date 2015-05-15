@@ -7,10 +7,7 @@ module ISet = Set.Make(struct
 
 type ctx = MLBDD.man
 
-type t = {
-  t: MLBDD.t; (* the BDD *)
-  s: ISet.t;  (* the symbols that are singletons *)
-}
+type t = MLBDD.t
 
 type sym = int
 
@@ -22,51 +19,45 @@ type query = sym L.q
 
 let init () = MLBDD.init ()
 
-let top ctx = {
-  t = MLBDD.dtrue ctx;
-  s = ISet.empty;
-}
+let top ctx = MLBDD.dtrue ctx
 
-let bottom ctx = {
-  t = MLBDD.dfalse ctx;
-  s = ISet.empty;
-}
+let bottom ctx = MLBDD.dfalse ctx
 
-let context t = MLBDD.manager t.t
+let context t = MLBDD.manager t
 
-let symbols t = MLBDD.support t.t |> MLBDD.list_of_support
+let symbols t = MLBDD.support t |> MLBDD.list_of_support
 
 let rec of_expr ctx = function
   | L.Empty ->
-    (MLBDD.dfalse ctx, MLBDD.dtrue ctx, ISet.empty)
+    (MLBDD.dfalse ctx, MLBDD.dtrue ctx)
   | L.Universe ->
-    (MLBDD.dtrue ctx, MLBDD.dtrue ctx, ISet.empty)
+    (MLBDD.dtrue ctx, MLBDD.dtrue ctx)
   | L.DisjUnion (a,b) -> 
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
     (* A ^ B = 0
        A /\ B = false
        ~(A /\ B) *)
-    (MLBDD.dor a b, (MLBDD.dand (MLBDD.dand ac bc) (MLBDD.dnot (MLBDD.dand a b))), ISet.union ai bi)
+    (MLBDD.dor a b, (MLBDD.dand (MLBDD.dand ac bc) (MLBDD.dnot (MLBDD.dand a b))))
   | L.Union (a,b) ->
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dor a b, MLBDD.dand ac bc, ISet.union ai bi)
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
+    (MLBDD.dor a b, MLBDD.dand ac bc)
   | L.Inter (a,b) ->
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dand a b, MLBDD.dand ac bc, ISet.union ai bi)
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
+    (MLBDD.dand a b, MLBDD.dand ac bc)
   | L.Diff (a,b) ->
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dand a (MLBDD.dnot b), MLBDD.dand ac bc, ISet.union ai bi)
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
+    (MLBDD.dand a (MLBDD.dnot b), MLBDD.dand ac bc)
   | L.Comp a ->
-    let (a,ac,ai) = of_expr ctx a in
-    (MLBDD.dnot a, ac, ai)
+    let (a,ac) = of_expr ctx a in
+    (MLBDD.dnot a, ac)
   | L.Var v ->
-    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx, ISet.empty)
+    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx)
   | L.Sing v ->
-    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx, ISet.singleton v)
+    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx)
 
 exception Unsupported
 
@@ -74,61 +65,52 @@ let rec of_cnstr is_pos is_over ctx c =
   let r is_inv = of_cnstr is_inv is_over ctx in
   match c, is_pos with
   | L.Eq (a,b), true ->
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dand (MLBDD.eq a b) (MLBDD.dand ac bc), ISet.union ai bi)
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
+    MLBDD.dand (MLBDD.eq a b) (MLBDD.dand ac bc)
   | L.Eq _, false ->
     if is_over then
-      (MLBDD.dtrue ctx, ISet.empty)
+      MLBDD.dtrue ctx
     else
       raise Unsupported
   | L.SubEq (a,b), true ->
-    let (a,ac,ai) = of_expr ctx a in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dand (MLBDD.imply a b) (MLBDD.dand ac bc), ISet.union ai bi)
+    let (a,ac) = of_expr ctx a in
+    let (b,bc) = of_expr ctx b in
+    MLBDD.dand (MLBDD.imply a b) (MLBDD.dand ac bc)
   | L.SubEq _, false ->
     if is_over then
-      (MLBDD.dtrue ctx, ISet.empty)
+      MLBDD.dtrue ctx
     else
       raise Unsupported
-  | L.In (av,b), true ->
-    let a = MLBDD.ithvar ctx av in
-    let (b,bc,bi) = of_expr ctx b in
-    (MLBDD.dand (MLBDD.imply a b) bc, ISet.add av bi)
-  | L.In (av,b), false ->
-    let a = MLBDD.ithvar ctx av in
-    let (b,bc,bi) = of_expr ctx b in
-    (
-      MLBDD.dand bc (MLBDD.eq (MLBDD.dand a b) (MLBDD.dfalse ctx))
-      , ISet.add av bi)
-
+  | L.In (av,b), _ ->
+    if is_over then
+      MLBDD.dtrue ctx
+    else
+      raise Unsupported
   | L.And (a,b), true ->
-    let (a,ai) = r is_pos a in
-    let (b,bi) = r is_pos b in
-    (MLBDD.dand a b, ISet.union ai bi)
+    let a = r is_pos a in
+    let b = r is_pos b in
+    MLBDD.dand a b
 
   | L.And (a,b), false ->
-    let (a,ai) = r is_pos a in
-    let (b,bi) = r is_pos b in
+    let a = r is_pos a in
+    let b = r is_pos b in
     if is_over then
-      (MLBDD.dor a b, ISet.union ai bi)
+      MLBDD.dor a b
     else 
       raise Unsupported
   | L.Not a, _ ->
     r (not is_pos) a
   | L.True, false
   | L.False, true ->
-    (MLBDD.dfalse ctx, ISet.empty)
+    MLBDD.dfalse ctx
   | L.False, false
   | L.True, true ->
-    (MLBDD.dtrue ctx, ISet.empty)
+    MLBDD.dtrue ctx
 
 let constrain cnstr t =
-  let (c,ci) = of_cnstr true true (context t) cnstr in
-  {
-    t = MLBDD.dand c t.t;
-    s = ISet.union ci t.s;
-  }
+  let c = of_cnstr true true (context t) cnstr in
+  MLBDD.dand c t
 
 
 let rec bin_of_list emp op acc = function
@@ -142,15 +124,11 @@ let rec bin_of_list emp op acc = function
 let bin_of_list emp op l = bin_of_list emp op [] l
 
 let serialize t =
-  MLBDD.allprime (MLBDD.dnot t.t) |>
+  MLBDD.allprime (MLBDD.dnot t) |>
   List.map (fun el ->
      let (l,r) =
        el |>
-       List.map (fun (b,v) -> (b, 
-                               if ISet.mem v t.s then
-                                 L.Sing v
-                               else
-                                 L.Var v)) |>
+       List.map (fun (b,v) -> (b, L.Var v)) |>
        List.partition fst in
       let l = List.map snd l in
       let l = bin_of_list L.Universe (fun a b -> L.Inter (a,b)) l in
@@ -162,29 +140,19 @@ let serialize t =
 
 let sat t cnstr =
   try
-    let (c,ci) = of_cnstr true false (context t) cnstr in
-    ISet.subset ci t.s &&
-    MLBDD.is_true (MLBDD.imply t.t c)
+    let c = of_cnstr true false (context t) cnstr in
+    MLBDD.is_true (MLBDD.imply t c)
   with Unsupported ->
     false
 
 
-let join a b =
-  {
-    t = MLBDD.dor a.t b.t;
-    s = ISet.union a.s b.s;
-  }
+let join a b = MLBDD.dor a b
 
 let widening = join
 
-let meet a b =
-  {
-    t = MLBDD.dand a.t b.t;
-    s = ISet.union a.s b.s;
-  }
+let meet a b = MLBDD.dand a b
 
-let le a b =
-  MLBDD.is_true (MLBDD.imply a.t b.t)
+let le a b = MLBDD.is_true (MLBDD.imply a b)
 
 let forget syms t =
   let ctx = context t in
@@ -192,29 +160,13 @@ let forget syms t =
              List.map (MLBDD.ithvar ctx) |>
              List.fold_left MLBDD.dand (MLBDD.dtrue (context t)) |>
              MLBDD.support in
-  {
-    t = MLBDD.exists supp t.t;
-    s = List.fold_left (fun s el -> ISet.remove el s) t.s syms
-  }
+  MLBDD.exists supp t
 
 
-let is_bottom t = MLBDD.is_false t.t
+let is_bottom t = MLBDD.is_false t
 
 let rename_symbols map t =
-  let max = List.fold_left (fun m (s,d) -> max m s) 0 map in
-  let arr = Array.init (max+1) (fun i -> i) in
-  List.iter (fun (s,d) -> arr.(s) <- d) map;
-  {
-    t = MLBDD.permute arr t.t;
-    s = List.fold_left (fun s (o,n) ->
-        if ISet.mem o t.s then
-          s |>
-          ISet.remove o |>
-          ISet.add n
-        else
-          s
-      ) t.s map;
-  }
+  MLBDD.permutef map t
 
 
 module SymSymSet = Set.Make(struct
@@ -233,7 +185,7 @@ module SymSet = Set.Make(struct
 let query t =
   let rmap = ref None in
   let get_subset_map () =
-    let map = MLBDD.allprime (MLBDD.dnot t.t) |>
+    let map = MLBDD.allprime (MLBDD.dnot t) |>
               List.filter (function
                   | [(true, _); (false, _)]
                   | [(false, _); (true, _)] -> true

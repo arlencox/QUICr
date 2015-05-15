@@ -9,8 +9,7 @@ module Make (D: Interface.Domain
               and type query = int L.q
             )
   : Interface.Domain
-    with type ctx = D.ctx
-     and type sym = D.sym
+    with type sym = D.sym
      and type cnstr = D.cnstr
      and type query = D.query
      and type output = D.output
@@ -20,12 +19,15 @@ module Make (D: Interface.Domain
     let compare = (-)
   end
 
-  module SymMap = Map.Make(S)
-  (*module SymSets = Util.UnionFind.Make(S)*)
-  module SymSets = Util.Naive.Make(S)
-  module SymSet = Set.Make(S)
+  module SymSets = UnionFind.MapBased.Make(S)
+  module SymMap = SymSets.EMap
+  module SymSet = SymSets.ESet
 
-  type ctx = D.ctx
+  type ctx = {
+    dctx: D.ctx;
+    pctx: SymSets.ctx;
+  }
+
   type sym = D.sym
   type cnstr = D.cnstr
   type output = D.output
@@ -69,7 +71,7 @@ module Make (D: Interface.Domain
       Format.fprintf ff "@[<v 0>@[<h>[%a]@]" (Format.pp_print_list ~pp_sep:Format.pp_print_space pp_sym) (SymSets.reps t.pack);
       SymMap.iter (fun r d ->
           Format.fprintf ff "@,@[<v 2>%a: " pp_sym r;
-          Format.fprintf ff "[@[<h>%a@]]" (Format.pp_print_list ~pp_sep:Format.pp_print_space pp_sym) (SymSets.elements r t.pack);
+          Format.fprintf ff "[@[<h>%a@]]" (Format.pp_print_list ~pp_sep:Format.pp_print_space pp_sym) (SymSets.ESet.elements (SymSets.elements r t.pack));
           Format.fprintf ff "@,%a@]" (D.pp_print pp_sym) d;
           (*D.pp_print pp_sym ff d*)
         ) t.doms;
@@ -93,7 +95,7 @@ module Make (D: Interface.Domain
     (* check that the symbols of dom are a subset of those in the corresponding pack *)
     SymMap.iter (fun r d ->
         let dom_syms = set_of_list (D.symbols d) in
-        let pack_syms = set_of_list (SymSets.elements r p.pack) in
+        let pack_syms = (SymSets.elements r p.pack) in
         if not @@ SymSet.subset dom_syms pack_syms then begin
           Format.printf "@.@.Failure: pack %d: %s @[<h>[%a] !<= [%a]@]@.@." r (match msg with None -> "" | Some m -> m) pp_set dom_syms pp_set pack_syms;
           assert false
@@ -108,7 +110,11 @@ module Make (D: Interface.Domain
       | None -> check p
       | Some msg -> check ~msg:msg p
 
-  let init = D.init
+  let init () =
+    {
+      dctx = D.init ();
+      pctx = SymSets.init ();
+    }
 
   let top ctx = Top ctx
 
@@ -118,7 +124,10 @@ module Make (D: Interface.Domain
     | Top ctx
     | Bottom ctx -> ctx
     | Dom p ->
-      D.context @@ snd @@ SymMap.choose p.doms
+      {
+        dctx = D.context @@ snd @@ SymMap.choose p.doms;
+        pctx = SymSets.context p.pack;
+      }
 
   let symbols = function
     | Top _ -> []
@@ -228,16 +237,16 @@ module Make (D: Interface.Domain
     | L.False -> SymSet.empty
 
 
-  let constrain cnstr t =
-    let do_constrain ctx p =
+  let rec constrain cnstr t =
+    let do_constrain (ctx : ctx) p =
       if debug then check ~msg:"constrain" p;
       let syms = SymSet.elements (syms cnstr) in
-      let p = merge_pack_list ctx syms p in
+      let p = merge_pack_list ctx.dctx syms p in
       if debug then assert (List.for_all (fun s -> SymSets.mem s p.pack) syms);
       let t = match syms with
       | [] ->
         if SymMap.is_empty p.doms then
-          let d = D.top ctx in
+          let d = D.top ctx.dctx in
           let d = D.constrain cnstr d in
           if D.is_bottom d then
             Bottom ctx
@@ -252,7 +261,7 @@ module Make (D: Interface.Domain
         let doms = p.doms in
         let pack = p.pack in
         let srep = SymSets.rep sym pack in
-        let d = try SymMap.find srep doms with Not_found -> D.top ctx in
+        let d = try SymMap.find srep doms with Not_found -> D.top ctx.dctx in
         let d = D.constrain cnstr d in
         let doms = SymMap.add srep d doms in
         Dom { pack; doms }
@@ -260,13 +269,20 @@ module Make (D: Interface.Domain
       if debug then check_t ~msg:"constrain end" t;
       t
     in
-    match t with
-    | Bottom _ -> t
-    | Top ctx ->
-      do_constrain ctx {pack=SymSets.empty; doms=SymMap.empty}
-    | Dom p ->
-      let ctx = D.context @@ snd @@ SymMap.choose p.doms in
-      do_constrain ctx p
+    match cnstr with
+    | L.And (a, b) ->
+      constrain a t |> constrain b
+    | _ ->
+      match t with
+      | Bottom _ -> t
+      | Top ctx ->
+        do_constrain ctx {pack=SymSets.empty ctx.pctx; doms=SymMap.empty}
+      | Dom p ->
+        let ctx = {
+          dctx = D.context @@ snd @@ SymMap.choose p.doms;
+          pctx = SymSets.context p.pack;
+        } in
+        do_constrain ctx p
       
   exception IsBottom
 
@@ -305,7 +321,7 @@ module Make (D: Interface.Domain
   let sat t cnstr =
     match t with
     | Bottom _ -> true
-    | Top ctx -> D.sat (D.top ctx) cnstr
+    | Top ctx -> D.sat (D.top ctx.dctx) cnstr
     | Dom p ->
       if debug then check ~msg:"sat" p;
       let syms = SymSet.elements (syms cnstr) in
@@ -364,7 +380,9 @@ module Make (D: Interface.Domain
     if a.pack == b.pack then
       (a.pack, a.doms, b.doms)
     else
-      let (pack,ad,bd) = SymSets.merge a.pack b.pack in
+      let pack = SymSets.merge a.pack b.pack in
+      let ad = SymSets.diff a.pack pack in
+      let bd = SymSets.diff b.pack pack in
       let rec do_changes t ch =
         let doms = List.fold_left (fun doms (rfrom,rto) ->
             (* merge from into to and remove from *)
@@ -442,38 +460,22 @@ module Make (D: Interface.Domain
     | _, Top _ -> true
     | Top _, Bottom _ -> false
     | Top ctx, Dom p ->
-      do_le ctx {pack=SymSets.empty; doms=SymMap.empty} p
+      do_le ctx.dctx {pack=SymSets.empty ctx.pctx; doms=SymMap.empty} p
     | Dom a, Dom b ->
       let ctx = SymMap.choose a.doms |> snd |> D.context in
       do_le ctx a b
     | Dom a, Bottom _ ->
       is_bottom (Dom a)
 
-
-  let rename_symbol o n p =
-    let r = SymSets.rep o p.pack in
-    let (r',pack) = match SymSets.remove o p.pack with
-      | pack, SymSets.NoRepresentative ->
-        (* no other representative for this set *)
-        let pack = SymSets.union n n pack in
-        (n,pack)
-      | pack, SymSets.NewRepresentative r ->
-        (* there is another representative *)
-        let pack = SymSets.union r n pack in
-        let r' = SymSets.rep n pack in
-        (r',pack)
-      | pack, SymSets.SameRepresentative ->
-        let pack = SymSets.union r n pack in
-        let r' = SymSets.rep n pack in
-        (r',pack)
-    in
-    let doms = p.doms in
-    let d = SymMap.find r doms in
-    let doms = SymMap.remove r doms in
-    let d = D.rename_symbols [(o,n)] d in
-    let doms = SymMap.add r' d doms in
-    { doms; pack }
-
+  let rename_symbols sym_map {doms;pack} =
+    let pack = SymSets.rename sym_map pack in
+    let doms = SymMap.fold (fun r d doms ->
+        let r = sym_map r in (* remap r to its new name *)
+        let r = SymSets.rep r pack in (* representative may have changed, find the new representative *)
+        let d = D.rename_symbols sym_map d in
+        SymMap.add r d doms
+      ) doms SymMap.empty in
+    {doms;pack}
 
   let rename_symbols sym_map t =
     match t with
@@ -481,11 +483,10 @@ module Make (D: Interface.Domain
     | Top _ -> t
     | Dom p ->
       if debug then check ~msg:"rename_symbols" p;
-      let p = List.fold_left (fun p (o,n) ->
-          rename_symbol o n p
-        ) p sym_map in
+      let p = rename_symbols sym_map p in
       if debug then check ~msg:"rename_symbols end" p;
       Dom p
+
 
   let query o =
     match o with

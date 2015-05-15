@@ -21,6 +21,7 @@ type 'sym t =
 type 'sym q = {
   get_eqs: unit -> ('sym * 'sym) list;
   get_eqs_sym: 'sym -> 'sym list;
+  (*get_representative: 'sym -> 'sym;*)
 }
 
 let prec_e = function
@@ -78,22 +79,92 @@ let to_string pp_sym t =
   Format.pp_print_flush ff ();
   Buffer.contents b
 
-let rec map_symbol_e f = function
+let rec map_sym_e f = function
   | Empty -> Empty
   | Universe -> Universe
-  | DisjUnion (a,b) -> DisjUnion(map_symbol_e f a, map_symbol_e f b)
-  | Union (a,b) -> Union(map_symbol_e f a, map_symbol_e f b)
-  | Inter (a,b) -> Inter(map_symbol_e f a, map_symbol_e f b)
-  | Diff (a,b) -> Diff(map_symbol_e f a, map_symbol_e f b)
-  | Comp a -> Comp (map_symbol_e f a)
-  | Var v -> Var (f v)
-  | Sing v -> Sing (f v)
+  | DisjUnion (a,b) -> DisjUnion(map_sym_e f a, map_sym_e f b)
+  | Union (a,b) -> Union(map_sym_e f a, map_sym_e f b)
+  | Inter (a,b) -> Inter(map_sym_e f a, map_sym_e f b)
+  | Diff (a,b) -> Diff(map_sym_e f a, map_sym_e f b)
+  | Comp a -> Comp (map_sym_e f a)
+  | Var v -> f false v
+  | Sing v -> f true v
 
-let rec map_symbol f = function
-  | Eq(a,b) -> Eq(map_symbol_e f a, map_symbol_e f b)
-  | SubEq(a,b) -> SubEq(map_symbol_e f a, map_symbol_e f b)
-  | In(a,b) -> In(f a, map_symbol_e f b)
-  | And(a,b) -> And(map_symbol f a, map_symbol f b)
-  | Not a -> Not (map_symbol f a)
+let rec map_sym f = function
+  | Eq(a,b) -> Eq(map_sym_e f a, map_sym_e f b)
+  | SubEq(a,b) -> SubEq(map_sym_e f a, map_sym_e f b)
+  | In(a,b) ->
+    begin match f true a with
+      | Sing a -> In(a, map_sym_e f b)
+      | a -> SubEq(a, map_sym_e f b)
+    end
+  | And(a,b) -> And(map_sym f a, map_sym f b)
+  | Not a -> Not (map_sym f a)
+  | True -> True
+  | False -> False
+
+let map_symbol_e f = map_sym_e (fun is_sing v -> if is_sing then Sing (f v) else Var (f v))
+
+let map_symbol f = map_sym (fun is_sing v -> if is_sing then Sing (f v) else Var (f v))
+
+let rec normalize_e is_comp : 'sym e -> 'sym e * 'sym t = function
+  | Empty ->
+    ((if is_comp then Universe else Empty), True)
+  | Universe ->
+    ((if is_comp then Empty else Universe), True)
+  | DisjUnion (a,b) ->
+    let (a,ca) = normalize_e is_comp a in
+    let (b,cb) = normalize_e is_comp b in
+    let e = if is_comp then
+        Inter(a,b)
+      else
+        Union(a,b)
+    in
+    (e,And(And(ca,cb), Eq(Inter(a,b), Empty)))
+  | Union (a,b) ->
+    let (a,ca) = normalize_e is_comp a in
+    let (b,cb) = normalize_e is_comp b in
+    if is_comp then 
+      (Inter(a,b), And(ca,cb))
+    else
+      (Union(a,b), And(ca,cb))
+  | Inter (a,b) ->
+    let (a,ca) = normalize_e is_comp a in
+    let (b,cb) = normalize_e is_comp b in
+    if is_comp then 
+      (Union(a,b), And(ca,cb))
+    else
+      (Inter(a,b), And(ca,cb))
+  | Diff (a,b) ->
+    normalize_e is_comp (Inter (a, Comp b))
+  | Comp a -> normalize_e (not is_comp) a
+  | Var v ->
+    if is_comp then
+      (Comp (Var v), True)
+    else
+      (Var v, True)
+  | Sing v -> 
+    if is_comp then
+      (Comp (Sing v), True)
+    else
+      (Sing v, True)
+
+let normalize_e e = normalize_e false e
+
+let rec normalize = function
+  | Eq(a,b) ->
+    let a,ca = normalize_e a in
+    let b,cb = normalize_e b in
+    And(Eq(a,b),And(ca,cb))
+  | SubEq(a,b) ->
+    let a,ca = normalize_e a in
+    let b,cb = normalize_e b in
+    And(SubEq(a,b),And(ca,cb))
+  | In(a,b) ->
+    let b,cb = normalize_e b in
+    And(SubEq(Sing a, b), cb)
+  | And(a,b) ->
+    And (normalize a, normalize b)
+  | Not a -> Not (normalize a)
   | True -> True
   | False -> False

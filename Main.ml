@@ -52,6 +52,12 @@ let combinators = [
        push (module P)
      ), " Use debug printer");
 
+  (* singleton handler *)
+  ("-sing", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Sing.Domain.Make(D) in
+       push (module P)
+     ), " Support singleton sets");
 ]
 
 let usage =

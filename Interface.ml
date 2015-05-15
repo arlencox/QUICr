@@ -65,10 +65,9 @@ module type Domain = sig
   val forget : sym list -> t -> t
 
   (** [rename_symbols f t] renames each symbol in [t] to the corresponding
-      symbol returned by looking up the symbol in the association list [f].
-      Relationships are maintained, assuming the mapping does not reuse any
-      symbols *)
-  val rename_symbols : (sym * sym) list -> t -> t
+      symbol returned the renaming function [f].  Relationships are maintained,
+      assuming the mapping does not reuse any symbols *)
+  val rename_symbols : (sym -> sym) -> t -> t
 
   (** {2 Query interface} *)
 

@@ -152,7 +152,6 @@ module Make(L: L)(D: Interface.Domain
 
   let rename_symbols map t =
     Format.fprintf t.c.ff "@[<v 2>rename_symbols:@,";
-    Format.fprintf t.c.ff "map: @[<h>%a@]@," (Format.pp_print_list (fun ff (f,t) -> Format.fprintf ff "%d->%d" f t)) map;
     Format.fprintf t.c.ff "pre : %a@," pp t;
     let res = {t with t = D.rename_symbols map t.t} in
     Format.fprintf t.c.ff "res: %a" pp res;
