@@ -467,25 +467,28 @@ module Make (D: Interface.Domain
     | Dom a, Bottom _ ->
       is_bottom (Dom a)
 
-  let rename_symbols sym_map {doms;pack} =
+  let rename_symbols_r sym_map {doms;pack} =
     let pack = SymSets.rename sym_map pack in
     let doms = SymMap.fold (fun r d doms ->
-        let r = sym_map r in (* remap r to its new name *)
+        let r = sym_map.Rename.get r in (* remap r to its new name *)
         let r = SymSets.rep r pack in (* representative may have changed, find the new representative *)
-        let d = D.rename_symbols sym_map d in
+        let d = D.rename_symbols (Rename.to_assoc_list sym_map) d in
         SymMap.add r d doms
       ) doms SymMap.empty in
     {doms;pack}
 
-  let rename_symbols sym_map t =
+  let rename_symbols_r sym_map t =
     match t with
     | Bottom _
     | Top _ -> t
     | Dom p ->
       if debug then check ~msg:"rename_symbols" p;
-      let p = rename_symbols sym_map p in
+      let p = rename_symbols_r sym_map p in
       if debug then check ~msg:"rename_symbols end" p;
       Dom p
+
+  let rename_symbols map t =
+    rename_symbols_r (Rename.of_assoc_list map) t
 
 
   let query o =

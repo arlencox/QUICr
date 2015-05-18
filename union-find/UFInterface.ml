@@ -75,10 +75,17 @@ module type UnionFind = sig
   *)
   val split : t -> t -> t
 
+  (** [diff t1 t2] takes two union-find structures [t1] and [t2], where [t1] is
+      a refinement of [t2] (two elements MAY be in the same set in [t1] if they
+      are in the same set in [t2].  It returns a list of pairs of elements that
+      must be merged to transform [t1] into [t2]. *)
   val diff : t -> t -> (elt * elt) list
-        
 
+  (** [le t1 t2] queries if [t2] is a refinement of [t1].  That is if two
+      elements are in the same set in [t2], they must be in the same set in
+      [t1] *) val le : t -> t -> bool
   val fold : (elt -> elt -> 'a -> 'a) -> t -> 'a -> 'a
 
-  val rename : (elt -> elt) -> t -> t
+  (** [rename map t] renames elements in [t] according to the mapping [map]. *)
+  val rename : elt Rename.t -> t -> t
 end

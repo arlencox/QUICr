@@ -161,11 +161,14 @@ module Make(D: Interface.Domain
       s = List.fold_left (fun s e -> SS.remove e s) a.s syms;
     }
 
-  let rename_symbols map a =
+  let rename_symbols_r rename a =
     {
-      d = D.rename_symbols map a.d;
-      s = SS.fold (fun e s -> SS.add (map e) s) a.s SS.empty;
+      d = D.rename_symbols (Rename.to_assoc_list rename) a.d;
+      s = SS.fold (fun e s -> SS.add (rename.Rename.get e) s) a.s SS.empty;
     }
+
+  let rename_symbols map a =
+    rename_symbols_r (Rename.of_assoc_list map) a
 
   let query a =
     D.query a.d

@@ -114,42 +114,6 @@ module Make(C: Comparable)
   let fold f t r =
     EMap.fold f t.e2r r
 
-  (*
-     1 2 3 4
-     1 1 3 3 (* r1 = [1; 3]    o1 = [3]    [3 -> 2]         *)
-     1 2 2 4 (* r2 = [1; 2; 4] o2 = [2; 4] [2 -> 1; 4 -> 3] *)
-     1 1 1 1 
-  *)
-
-  (* m *)
-  (*let merge t1 t2 =
-    (* compute representative sets *)
-    let r1 = EMap.fold (fun r _ r1 -> ESet.add r r1) t1.r2e ESet.empty in
-    let r2 = EMap.fold (fun r _ r2 -> ESet.add r r2) t2.r2e ESet.empty in
-    (* identify representatives that are only in t1 and t2 respectively *)
-    let o1 = ESet.diff r1 r2 in
-    let o2 = ESet.diff r2 r1 in
-    (* compute merges to change 1 into result *)
-    let (res,d1) = ESet.fold (fun e2 (res,d1) ->
-        let r2 = try set e2 t2 with Not_found -> e2 in
-        (
-          union e2 r2 res,
-          (e2,r2)::d1
-        )
-      ) o1 (t1,[]) in
-    (* compute merges to change 2 into result *)
-    let d2 = ESet.fold (fun e1 d2 ->
-        let r1 = try set e1 t1 with Not_found -> e1 in
-        (e1,r1)::d2
-      ) o2 [] in
-    (* as a check, compute result from 2 *)
-    if debug then begin
-      let res2 = List.fold_left (fun res2 (e1,r1) -> union e1 r1 res2) t2 d2 in
-      assert (equal res res2)
-    end;
-
-    (res,d1,d2)*)
-
   let merge t1 t2 =
     let res = t1 in
     let res = EMap.fold (fun e r res ->
@@ -184,12 +148,56 @@ module Make(C: Comparable)
           (t1,tm)
       ) t2 (t1,[]))
 
-  let rename map t =
+  let rename rename t =
     fold (fun e r t ->
-        let e = map e in
-        let r = map r in
+        let e = rename.Rename.get e in
+        let r = rename.Rename.get r in
         union e r t
       ) t (empty ())
+
+
+  (* This is true if there exists a function f that maps each representative in
+     t2 to each representative in t1 such that
+       forall e.  f(rep(e,t2)) = rep(e,t1)
+
+     For example (representative in parens):
+       a = (b), (c) = d   <=   (a) = b, (c), (d)
+
+     The function f can be defined as such
+     f(a) = b
+     f(c) = c
+     f(d) = c
+
+     rep(a,t2) = a
+     |> f      = b
+     rep(a,t1) = b
+
+     rep(b,t2) = a
+     |> f      = b
+     rep(b,t1) = b
+
+     rep(c,t2) = c
+     |> f      = c
+     rep(c,t1) = c
+
+     rep(d,t2) = d
+     |> f      = c
+     rep(d,t1) = c
+  *)
+  let le t1 t2 =
+    let h = Hashtbl.create (3*(EMap.cardinal t2.r2e)) in
+    EMap.for_all (fun e r2 ->
+        let r1 = rep e t1 in
+        try
+          let r1' = Hashtbl.find h r2 in
+          r1 == r1'
+        with Not_found ->
+          Hashtbl.replace h r2 r1;
+          true
+      ) t2.e2r
+
+
+    
 
 
 
