@@ -167,13 +167,8 @@ let is_bottom t = MLBDD.is_false t
 
 
 
-let rename_symbols_r rename t =
-  MLBDD.permutef rename.Rename.get t
-  (*MLBDD.permutef map t*)
-
-let rename_symbols map t =
-  rename_symbols_r (Rename.of_assoc_list map) t
-
+let rename_symbols rename t =
+  MLBDD.permutef (Rename.get rename) t
 
 
 module SymSymSet = Set.Make(struct

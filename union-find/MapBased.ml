@@ -150,10 +150,13 @@ module Make(C: Comparable)
 
   let rename rename t =
     fold (fun e r t ->
-        let e = rename.Rename.get e in
-        let r = rename.Rename.get r in
+        let e = Rename.get rename e in
+        let r = Rename.get rename r in
         union e r t
       ) t (empty ())
+
+  let pairs t =
+    EMap.bindings t.e2r
 
 
   (* This is true if there exists a function f that maps each representative in

@@ -186,7 +186,7 @@ module Make(D: Interface.Domain
             let oldid = Hashtbl.find env lhs in
             state |>
             D.forget [oldid] |>
-            D.rename_symbols [lid,oldid] (*(fun id -> if id = lid then oldid else id)*)
+            D.rename_symbols (Rename.singleton lid oldid) (*[lid,oldid]*) (*(fun id -> if id = lid then oldid else id)*)
           else state in
         if !print_step then print_state renv state;
         state
@@ -197,7 +197,7 @@ module Make(D: Interface.Domain
           else (false,fresh lhs) in
         let state = D.constrain (L.SubEq(L.Sing lid, L.Var rhs)) state in
         let state = if do_rename then
-            D.rename_symbols [lid, Hashtbl.find env lhs] state (*(fun id -> if id = lid then Hashtbl.find env lhs else id) state*)
+            D.rename_symbols (Rename.singleton lid (Hashtbl.find env lhs)) state (*[lid, Hashtbl.find env lhs] state *) (*(fun id -> if id = lid then Hashtbl.find env lhs else id) state*)
             (*D.rename_symbols [(lid, Hashtbl.find env lhs)] state*)
           else state in
         if !print_step then print_state renv state;

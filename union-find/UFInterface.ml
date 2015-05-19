@@ -88,4 +88,8 @@ module type UnionFind = sig
 
   (** [rename map t] renames elements in [t] according to the mapping [map]. *)
   val rename : elt Rename.t -> t -> t
+
+  (** [pairs t ] produces a list of all pairs needed to construct the
+      union-find structure *)
+  val pairs : t -> (elt * elt) list
 end

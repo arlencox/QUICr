@@ -45,6 +45,13 @@ let combinators = [
        push (module P)
      ), " Pack variables into multiple domain instances");
 
+  (* equality combinator *)
+  ("-eq", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Eq.Domain.Make(D) in
+       push (module P)
+     ), " Track equality constraints externally from the domain");
+
   (* debugger combinator *)
   ("-debug", Arg.Unit (fun () ->
        let module D = (val pop ()) in
