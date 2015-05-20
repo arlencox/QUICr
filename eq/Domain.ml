@@ -65,14 +65,20 @@ module Make
     let els = List.fold_left (fun els el -> SSet.add el els) els (D.symbols d) in
     U.ESet.elements els
 
-  let serialize t =
-    let d = D.serialize t.d in
+  let serialize_eq t r =
     U.fold (fun el r d ->
         if el <> r then
-          L.And(L.Eq(L.Var el, L.Var r),d)
+          if d <> L.True then
+            L.And(L.Eq(L.Var el, L.Var r),d)
+          else
+            L.Eq(L.Var el, L.Var r)
         else
           d
-      ) t.e d
+      ) t.e r
+
+  let serialize t =
+    let d = D.serialize t.d in
+    serialize_eq t d
 
   let rec partition (eq,neq) = function
     | L.And(a,b) -> partition (partition (eq,neq) a) b
@@ -219,11 +225,17 @@ module Make
 
   let pp_debug pp_sym ff t =
     let ps = U.pairs t.e in
-    Format.fprintf ff "@[<hv 2>eqs:@ %a@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ff (a,b) -> Format.fprintf ff "%a = %a" pp_sym a pp_sym b)) ps;
-    D.pp_print pp_sym ff t.d
+    Format.fprintf ff "@[<v 0>@[<hv 2>eqs:@ %a@]@,dom: %a@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ff (a,b) -> Format.fprintf ff "%a = %a" pp_sym a pp_sym b)) ps
+      (D.pp_print pp_sym) t.d
+
 
   let pp_print pp_sym ff t =
-    pp_debug pp_sym ff t
+    begin match serialize_eq t L.True with
+    | L.True -> ()
+    | eqs ->
+      Format.fprintf ff "%a ∧ " (L.pp pp_sym) eqs
+    end;
+    D.pp_print pp_sym ff t.d
 end
 

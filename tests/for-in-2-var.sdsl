@@ -1,0 +1,29 @@
+x2 = x1;
+
+// result is initially empty
+res = {};
+
+// create iteration sets
+fout = {};
+fin = s;
+
+// start loop
+while(*) {
+  // project out x
+  kill x;
+  // get x from fin
+  assume(x in fin);
+  fin = fin \ {x};
+
+  // run body of loop
+  if(x in exc) { } else {
+    res = res U x;
+  };
+  
+  // close the loop
+  fout = fout U+ {x};
+};
+assume(fin = {});
+assume(fout = s);
+assert(res = s \ exc);
+assert(x1 = x2);
