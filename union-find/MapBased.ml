@@ -90,9 +90,10 @@ module Make(C: Comparable)
     (* r1 becomes new representative *)
     let r1s = element_set r1 t in
     let r2s = element_set r2 t in
+    let s = ESet.union r1s r2s in
     let r2e = EMap.remove r2 t.r2e in
-    let r2e = EMap.add r1 (ESet.union r1s r2s) r2e in
-    let e2r = ESet.fold (fun e e2r -> EMap.add e r1 e2r) r2s t.e2r in
+    let r2e = EMap.add r1 s r2e in
+    let e2r = ESet.fold (fun e e2r -> EMap.add e r1 e2r) s t.e2r in
     { e2r; r2e }
 
   module CEMap = Map.Make(struct
@@ -125,12 +126,12 @@ module Make(C: Comparable)
   let split t1 t2 =
     let h = Hashtbl.create 8191 in
     let res = ref (empty ()) in
-    ignore(EMap.merge (fun e _ _ ->
-        let r1 = rep e t1 in
-        let r2 = rep e t2 in
+    ignore(EMap.merge (fun e r1 r2 ->
+        let r1 = match r1 with Some r1 -> r1 | None -> e in
+        let r2 = match r2 with Some r2 -> r2 | None -> e in
         begin try
-          let r = Hashtbl.find h (r1,r2) in
-          res := union e r !res
+            let r = Hashtbl.find h (r1,r2) in
+            res := union e r !res
           with Not_found ->
             Hashtbl.replace h (r1,r2) e;
             res := union e e !res

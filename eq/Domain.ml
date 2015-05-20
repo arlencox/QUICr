@@ -224,11 +224,10 @@ module Make
     }
 
   let pp_debug pp_sym ff t =
-    let ps = U.pairs t.e in
-    Format.fprintf ff "@[<v 0>@[<hv 2>eqs:@ %a@]@,dom: %a@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ff (a,b) -> Format.fprintf ff "%a = %a" pp_sym a pp_sym b)) ps
-      (D.pp_print pp_sym) t.d
-
+    Format.fprintf ff "@[<v -7>";
+    Format.fprintf ff "@[<hv 2>eqs:@ %a@]@," (L.pp pp_sym) (serialize_eq t L.True);
+    Format.fprintf ff "@[<h>dom:@ %a@]" (D.pp_print pp_sym) t.d;
+    Format.fprintf ff "@]"
 
   let pp_print pp_sym ff t =
     begin match serialize_eq t L.True with
