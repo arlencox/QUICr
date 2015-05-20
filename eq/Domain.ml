@@ -204,6 +204,8 @@ module Make
     {d;e;s}
 
   let meet a b =
+    (*let cb = serialize b in*)
+    (*constrain cb a*)
     let e = U.merge a.e b.e in
     let d = D.meet a.d b.d in
     (* TODO: a better implementation that doesn't do a full remap *)
@@ -218,17 +220,22 @@ module Make
         | e, U.SameRepresentative ->
           (* it was not a representative, it is not in the underlying domain *)
           (e,c,syms)
-        | e, U.NewRepresentative r ->
+        | e, U.NewRepresentative r when SSet.mem r t.s ->
           (* it is a representative and there is an equality, do a replacement
              in the underlying domain *)
           (e, Rename.append c (Rename.singleton s r), syms)
+        | e, U.NewRepresentative r ->
+          (* if the new representative is not in the domain, skip any renaming
+          *)
+          (e,c,syms)
       ) (t.e,Rename.empty,[]) syms in
-    let d = t.d |>
-            D.forget syms |>
-            D.rename_symbols (Rename.of_composition renames) in
-    (* FIXME: compute s properly *)
-    remap e d
-    (*{e;d;s=t.s}*)
+    let d = t.d in
+    let d = if syms <> [] then D.forget syms d else d in
+    let d = if Rename.is_empty renames then d else
+        D.rename_symbols (Rename.of_composition renames) d in
+    (* FIXME: do a better computation of symbols *)
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+    {e;d;s}
 
   let rename_symbols map t =
     let e = U.rename map t.e in

@@ -51,6 +51,9 @@ let to_assoc_list t =
 
 let empty = D.empty
 
+let is_empty c =
+  D.is_empty c
+
 let prepend t c =
   D.push_front t c
 

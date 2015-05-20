@@ -14,6 +14,7 @@ val get : 'sym t -> 'sym -> 'sym
 val to_assoc_list : 'sym t -> ('sym * 'sym) list
 
 val empty : 'sym c
+val is_empty : 'sym c -> bool
 val prepend : 'sym t -> 'sym c -> 'sym c
 val append : 'sym c -> 'sym t -> 'sym c
 val compose : 'sym c -> 'sym c -> 'sym c
