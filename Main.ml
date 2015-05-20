@@ -65,6 +65,13 @@ let combinators = [
        let module P = Sing.Domain.Make(D) in
        push (module P)
      ), " Support singleton sets");
+
+  (* statistics *)
+  ("-stats", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Stats.Domain.Make(D) in
+       push (module P)
+     ), " Accumulate statistics on domain operations");
 ]
 
 let usage =

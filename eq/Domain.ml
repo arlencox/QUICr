@@ -34,8 +34,8 @@ module Make
 
   type t = {
     d: D.t; (* non-equalities *)
+    s: SSet.t; (* symbols managed by in d *)
     e: U.t; (* equalities *)
-    dirty: bool; (* false if every symbol in d is a representative in e *)
   }
 
   let init () = {
@@ -45,14 +45,14 @@ module Make
 
   let top ctx = {
     d = D.top ctx.cd;
+    s = SSet.empty;
     e = U.empty ctx.ce;
-    dirty = false;
   }
 
   let bottom ctx = {
     d = D.bottom ctx.cd;
+    s = SSet.empty;
     e = U.empty ctx.ce;
-    dirty = false;
   }
 
   let context t = {
@@ -92,37 +92,56 @@ module Make
 
   let partition = partition ([], L.True)
 
-  let constrain cnstr {d;e;dirty=_} =
+  let remap_cnstr e cnstr =
+    L.map_symbol (fun s -> U.rep s e) cnstr
+
+  let symbols_cnstr cnstr =
+    let syms = ref SSet.empty in
+    L.iter_sym (fun _sing s -> syms := SSet.add s !syms) cnstr;
+    !syms
+
+  let fold_pair_els f r l =
+    List.fold_left (fun r (a,b) -> f (f r a) b) r l
+
+  let constrain cnstr {d;e;s} =
     (* partition the constraints *)
     let (eq,neq) = partition cnstr in
-    (* add equalities to the equality domain *)
-    let e = List.fold_left (fun e (a,b) -> U.union a b e) e eq in
+    (* save the original equalities *)
+    let orig_e = e in
+    (* compute new equalities *)
+    let e = List.fold_left (fun e (a,b) ->
+        U.union a b e
+      ) e eq in
+    (* compute representatives that may have changed *)
+    let ren = fold_pair_els (fun ren a ->
+        let r : sym = U.rep a orig_e in
+        if SSet.mem r s then
+          let r' = U.rep r e in
+          if r != r' then
+            (r,r') :: ren
+          else
+            ren
+        else
+          ren
+      ) [] eq in
+    (* do a rename on d if necessary *)
+    let d = if ren = [] then d else
+        D.rename_symbols (Rename.of_assoc_list ren) d in
+    (* constrain d with the non-equality constraints after they have had their symbols remapped *)
+    let neq = remap_cnstr e cnstr in
     let d = D.constrain neq d in
-    {d;e;dirty=true}
+    (* recompute symbols of d *)
+    let s = List.fold_left (fun s (r,_r') -> SSet.remove r s) s ren in
+    let s = SSet.union s (symbols_cnstr neq) in
 
-  let remap_cnstr t cnstr =
-    L.map_symbol (fun s -> U.rep s t.e) cnstr
+    {d;e;s}
+      
 
-  let remap t =
-    let syms = lazy (List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols t.d)) in
-    let rename = Rename.of_iter_mem_get
-        (fun f -> List.iter (fun s -> f s (U.rep s t.e)) (D.symbols t.d))
-        (fun s -> SSet.mem s (Lazy.force syms))
-        (fun s -> U.rep s t.e) in
-    if t.dirty then
-      {
-        d = D.rename_symbols rename t.d;
-        e = t.e;
-        dirty = false
-      }
-    else
-      t
 
   let sat t cnstr =
-    let t = remap t in
     (* partition the constraints *)
     let (eq,neq) = partition cnstr in
-    let neq = remap_cnstr t neq in
+    let neq = remap_cnstr t.e neq in
     (* check equalities first *)
     let cnstr = List.fold_left (fun cnstr (a,b) ->
         if U.rep a t.e = U.rep b t.e then
@@ -134,12 +153,9 @@ module Make
     D.sat t.d cnstr
 
   let is_bottom t =
-    let t = remap t in
     D.is_bottom t.d
 
   let le a b =
-    let a = remap a in
-    let b = remap b in
     (* go through each equality in b.  If it is not in a.eq, add to a constraint *)
     let cnstr = U.fold (fun e1 _ cnstr ->
         let e2 = U.rep e1 b.e in
@@ -163,7 +179,12 @@ module Make
     let doma = D.constrain ca a.d in
     let domb = D.constrain cb b.d in
     let d = op doma domb in
-    {d;e;dirty=true}
+    let s = a.s |>
+            SSet.union b.s |>
+            SSet.union (symbols_cnstr ca) |>
+            SSet.union (symbols_cnstr cb)
+    in
+    {d;e;s}
 
 
 
@@ -173,13 +194,22 @@ module Make
   let widening a b =
     upper_bound D.widening a b
 
+  let remap e d =
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+    let rename = Rename.of_iter_mem_get
+        (fun f -> SSet.iter (fun sym -> f sym (U.rep sym e)) s)
+        (fun sym -> SSet.mem sym s)
+        (fun sym -> U.rep sym e) in
+    let d = D.rename_symbols rename d in
+    {d;e;s}
+
   let meet a b =
     let e = U.merge a.e b.e in
     let d = D.meet a.d b.d in
-    {d;e;dirty=true}
+    (* TODO: a better implementation that doesn't do a full remap *)
+    remap e d
 
   let forget syms t =
-    let t = remap t in
     let e,renames,syms = List.fold_left (fun (e,c,syms) s ->
         match U.remove s e with
         | e, U.NoRepresentative ->
@@ -196,14 +226,14 @@ module Make
     let d = t.d |>
             D.forget syms |>
             D.rename_symbols (Rename.of_composition renames) in
-    {e;d;dirty=false}
+    (* FIXME: compute s properly *)
+    remap e d
+    (*{e;d;s=t.s}*)
 
   let rename_symbols map t =
-    {
-      e = U.rename map t.e;
-      d = D.rename_symbols map t.d;
-      dirty = true;
-    }
+    let e = U.rename map t.e in
+    let d = D.rename_symbols map t.d in
+    remap e d
 
   let query t =
     {
@@ -218,15 +248,14 @@ module Make
     }
 
   let combine q t =
-    {t with
-     e = List.fold_left (fun e (a,b) -> U.union a b e) t.e (q.L.get_eqs ());
-     dirty = true;
-    }
+    let cnstr = List.fold_left (fun cnstr (a,b) -> L.And(cnstr,L.Eq(L.Var a,L.Var b))) L.True (q.L.get_eqs ()) in
+    constrain cnstr t
 
   let pp_debug pp_sym ff t =
     Format.fprintf ff "@[<v -7>";
     Format.fprintf ff "@[<hv 2>eqs:@ %a@]@," (L.pp pp_sym) (serialize_eq t L.True);
-    Format.fprintf ff "@[<h>dom:@ %a@]" (D.pp_print pp_sym) t.d;
+    Format.fprintf ff "@[<h>dom:@ %a@]@," (D.pp_print pp_sym) t.d;
+    Format.fprintf ff "@[<h>sym:@ %a@]" (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (SSet.elements t.s);
     Format.fprintf ff "@]"
 
   let pp_print pp_sym ff t =

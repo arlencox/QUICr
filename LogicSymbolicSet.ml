@@ -79,6 +79,37 @@ let to_string pp_sym t =
   Format.pp_print_flush ff ();
   Buffer.contents b
 
+let rec iter_sym_e f = function
+  | Empty -> ()
+  | Universe -> ()
+  | DisjUnion (a, b)
+  | Union (a, b)
+  | Inter (a, b)
+  | Diff (a, b) ->
+    iter_sym_e f a;
+    iter_sym_e f b
+  | Comp a ->
+    iter_sym_e f a
+  | Var v -> f false v
+  | Sing v -> f true v
+
+let rec iter_sym f = function
+  | Eq(a,b)
+  | SubEq(a,b) ->
+    iter_sym_e f a;
+    iter_sym_e f b
+  | In(a,b) ->
+    f true a;
+    iter_sym_e f b
+  | And(a,b) ->
+    iter_sym f a;
+    iter_sym f b
+  | Not a ->
+    iter_sym f a
+  | True -> ()
+  | False -> ()
+
+
 let rec map_sym_e f = function
   | Empty -> Empty
   | Universe -> Universe

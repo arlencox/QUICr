@@ -3,6 +3,7 @@
 <eq/*>: for-pack(Eq)
 <logger/*>: for-pack(Logger)
 <packer/*>: for-pack(Packer)
+<stats/*>: for-pack(Stats)
 <union-find/*>: for-pack(UnionFind)
 <sdsl/*>: for-pack(SDSL)
 <sing/*>: for-pack(Sing)
@@ -10,3 +11,4 @@
 <debug-print/*>: for-pack(DebugPrint)
 <Main.*>: package(str)
 <*> or <bdd-full/*>: package(mlbdd)
+<*> or <stats/*>: package(unix)
