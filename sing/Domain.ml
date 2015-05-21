@@ -155,6 +155,9 @@ module Make(D: Interface.Domain
   let is_bottom a =
     D.is_bottom a.d
 
+  let is_top a =
+    D.is_top a.d
+
   let forget syms a = 
     {
       d = D.forget syms a.d;

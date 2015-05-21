@@ -87,12 +87,15 @@ module Make
     U.ESet.elements els
 
   let serialize_eq t r =
+    let l_and a b =
+      match a,b with
+      | L.True, b -> b
+      | a, L.True -> a
+      | a, b -> L.And(a,b)
+    in
     U.fold (fun el r d ->
         if el <> r then
-          if d <> L.True then
-            L.And(L.Eq(L.Var el, L.Var r),d)
-          else
-            L.Eq(L.Var el, L.Var r)
+          l_and (L.Eq(L.Var el, L.Var r)) d
         else
           d
       ) t.e r
@@ -177,6 +180,9 @@ module Make
 
   let is_bottom t =
     D.is_bottom t.d
+
+  let is_top {d;e;_} =
+    U.is_empty e && D.is_top d
 
   let le a b =
     (* go through each equality in b.  If it is not in a.eq, add to a constraint *)

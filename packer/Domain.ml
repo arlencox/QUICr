@@ -54,11 +54,13 @@ module Make (D: Interface.Domain
     | Dom t ->
       let first = ref true in
       SymMap.iter (fun _ d ->
-          if !first then
-            first := false
-          else
-            Format.fprintf ff " ∧ ";
-          D.pp_print pp_sym ff d
+          if not (D.is_top d) then begin
+            if !first then
+              first := false
+            else
+              Format.fprintf ff " ∧ ";
+            D.pp_print pp_sym ff d
+          end
         ) t.doms
 
   let pp_debug pp_sym ff t =
@@ -318,6 +320,16 @@ module Make (D: Interface.Domain
           D.is_bottom d
         ) p.doms
 
+  let is_top t =
+    match t with
+    | Bottom _ -> false
+    | Top _ -> true
+    | Dom p ->
+      if debug then check ~msg:"is_top" p;
+      SymMap.for_all (fun r d ->
+          D.is_top d
+        ) p.doms
+
   let sat t cnstr =
     match t with
     | Bottom _ -> true
@@ -474,6 +486,26 @@ module Make (D: Interface.Domain
         let r = SymSets.rep r pack in (* representative may have changed, find the new representative *)
         let d = D.rename_symbols sym_map d in
         SymMap.add r d doms
+      ) doms SymMap.empty in
+    {doms;pack}
+
+  let rename_symbols sym_map {doms;pack} =
+    let renames = Rename.fold (fun a a' renames ->
+        let r = SymSets.rep a pack in
+        let l = try SymMap.find r renames with Not_found -> [] in
+        SymMap.add r ((a,a')::l) renames
+      ) sym_map SymMap.empty in
+
+    let pack = SymSets.rename sym_map pack in
+    let doms = SymMap.fold (fun ro d doms ->
+        let r = Rename.get sym_map ro in (* remap r to its new name *)
+        let r = SymSets.rep r pack in (* representative may have changed, find the new representative *)
+        try
+          let rename = SymMap.find ro renames in
+          let d = D.rename_symbols (Rename.of_assoc_list rename) d in
+          SymMap.add r d doms
+        with Not_found ->
+          SymMap.add r d doms
       ) doms SymMap.empty in
     {doms;pack}
 

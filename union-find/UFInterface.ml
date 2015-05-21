@@ -16,6 +16,10 @@ module type UnionFind = sig
   (** [empty] returns the empty set of sets *)
   val empty : ctx -> t
 
+  (** [is_empty] returns true if this is an empty mapping (either empty or only
+      singleton sets *)
+  val is_empty : t -> bool
+
   (** [context t] retrieves the context used in the construction of this [t] *)
   val context : t -> ctx
 

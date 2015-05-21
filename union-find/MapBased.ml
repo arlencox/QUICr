@@ -26,6 +26,10 @@ module Make(C: Comparable)
     r2e = EMap.empty;
   }
 
+  let is_empty t =
+    EMap.is_empty t.e2r ||
+    EMap.for_all (fun e r -> C.compare e r = 0) t.e2r
+
   let init () = ()
 
   let context t = ()

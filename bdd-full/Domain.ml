@@ -165,6 +165,8 @@ let forget syms t =
 
 let is_bottom t = MLBDD.is_false t
 
+let is_top t = MLBDD.is_true t
+
 
 
 let rename_symbols rename t =

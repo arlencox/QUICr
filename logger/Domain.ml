@@ -141,6 +141,13 @@ module Make(L: L)(D: Interface.Domain
     Format.fprintf t.c.ff "@]@.";
     res
 
+  let is_top t =
+    Format.fprintf t.c.ff "@[<v 2>is_top:@,";
+    Format.fprintf t.c.ff "pre: %a@," pp t;
+    let res = D.is_top t.t in
+    Format.fprintf t.c.ff "res: %b" res;
+    Format.fprintf t.c.ff "@]@.";
+    res
 
   let forget syms t =
     Format.fprintf t.c.ff "@[<v 2>forget:@,";

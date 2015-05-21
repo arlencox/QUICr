@@ -58,6 +58,9 @@ module type Domain = sig
   (** [is_bottom t] returns true if [t] is the bottom element *)
   val is_bottom: t -> bool
 
+  (** [is_top t] returns true if [t] is the top element *)
+  val is_top: t -> bool
+
   (** {2 Symbol Manipulation} *)
 
   (** [forget syms t] forgets meaning of (projects out) the symbols [syms] in

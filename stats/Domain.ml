@@ -52,6 +52,7 @@ module Make(D: Interface.Domain
       meet: stats ref;
       le: stats ref;
       is_bottom: stats ref;
+      is_top: stats ref;
       forget: stats ref;
       rename_symbols: stats ref;
       query: stats ref;
@@ -70,6 +71,7 @@ module Make(D: Interface.Domain
     Format.fprintf ff "@,meet: %a" pp_stat ctx.meet;
     Format.fprintf ff "@,le: %a" pp_stat ctx.le;
     Format.fprintf ff "@,is_bottom: %a" pp_stat ctx.is_bottom;
+    Format.fprintf ff "@,is_top: %a" pp_stat ctx.is_top;
     Format.fprintf ff "@,forget: %a" pp_stat ctx.forget;
     Format.fprintf ff "@,rename_symbols: %a" pp_stat ctx.rename_symbols;
     Format.fprintf ff "@,query: %a" pp_stat ctx.query;
@@ -102,6 +104,7 @@ module Make(D: Interface.Domain
     meet = stats_init ();
     le = stats_init ();
     is_bottom = stats_init ();
+    is_top = stats_init ();
     forget = stats_init ();
     rename_symbols = stats_init ();
     query = stats_init ();
@@ -152,6 +155,9 @@ module Make(D: Interface.Domain
 
   let is_bottom {d;c} =
     stat c.is_bottom (lazy (D.is_bottom d))
+
+  let is_top {d;c} =
+    stat c.is_top (lazy (D.is_top d))
 
   let forget syms {d;c} =
     {c;d= stat c.forget (lazy (D.forget syms d))}
