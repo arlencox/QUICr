@@ -37,7 +37,8 @@ module Make(L: L)(D: Interface.Domain
   type query = int S.q
 
   let pp ff t =
-    S.pp Format.pp_print_int ff (D.serialize t.t)
+    D.pp_print Format.pp_print_int ff t.t
+    (*S.pp Format.pp_print_int ff (D.serialize t.t)*)
 
   let ppc ff c =
     S.pp Format.pp_print_int ff c

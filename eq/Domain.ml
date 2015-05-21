@@ -1,5 +1,8 @@
 module L = LogicSymbolicSet
 
+let debug = true
+(*let debug = false*)
+
 module Make
     (D: Interface.Domain
      with type sym = int
@@ -37,6 +40,24 @@ module Make
     s: SSet.t; (* symbols managed by in d *)
     e: U.t; (* equalities *)
   }
+
+  let check msg t =
+    let syms = List.fold_left (fun syms s -> SSet.add s syms) SSet.empty (D.symbols t.d) in
+    let s_subset_of_syms = SSet.subset syms t.s in
+    if not s_subset_of_syms then begin
+      Format.printf "s not subet of syms: %s@." msg;
+      Format.printf " s    = %a@." (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (SSet.elements t.s);
+      Format.printf " syms = %a@." (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (D.symbols t.d);
+    end;
+    assert(s_subset_of_syms);
+    assert(SSet.for_all (fun s ->
+        let r = U.rep s t.e in
+        let sym_is_rep = r = s in
+        if not sym_is_rep then begin
+          Format.printf "sym is not rep: %d;   rep = %d: %s@." s r msg
+        end;
+        sym_is_rep
+      ) syms)
 
   let init () = {
     cd = D.init ();
@@ -134,7 +155,9 @@ module Make
     let s = List.fold_left (fun s (r,_r') -> SSet.remove r s) s ren in
     let s = SSet.union s (symbols_cnstr neq) in
 
-    {d;e;s}
+    let t = {d;e;s} in
+    if debug then check "constrain" t;
+    t
       
 
 
@@ -184,7 +207,9 @@ module Make
             SSet.union (symbols_cnstr ca) |>
             SSet.union (symbols_cnstr cb)
     in
-    {d;e;s}
+    let t = {d;e;s} in
+    if debug then check "upper bound" t;
+    t
 
 
 
@@ -201,7 +226,10 @@ module Make
         (fun sym -> SSet.mem sym s)
         (fun sym -> U.rep sym e) in
     let d = D.rename_symbols rename d in
-    {d;e;s}
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+    let t = {d;e;s} in
+    if debug then check "remap" t;
+    t
 
   let meet a b =
     (*let cb = serialize b in*)
@@ -220,7 +248,7 @@ module Make
         | e, U.SameRepresentative ->
           (* it was not a representative, it is not in the underlying domain *)
           (e,c,syms)
-        | e, U.NewRepresentative r when SSet.mem r t.s ->
+        | e, U.NewRepresentative r when SSet.mem s t.s ->
           (* it is a representative and there is an equality, do a replacement
              in the underlying domain *)
           (e, Rename.append c (Rename.singleton s r), syms)
@@ -235,7 +263,9 @@ module Make
         D.rename_symbols (Rename.of_composition renames) d in
     (* FIXME: do a better computation of symbols *)
     let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
-    {e;d;s}
+    let t = {e;d;s} in
+    if debug then check "forget" t;
+    t
 
   let rename_symbols map t =
     let e = U.rename map t.e in
