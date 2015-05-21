@@ -7,6 +7,7 @@
 <union-find/*>: for-pack(UnionFind)
 <sdsl/*>: for-pack(SDSL)
 <sing/*>: for-pack(Sing)
+<sat/*>: for-pack(SAT)
 <ds/*>: for-pack(DS)
 <debug-print/*>: for-pack(DebugPrint)
 <Main.*>: package(str)

@@ -23,6 +23,8 @@ let arg_blank = ("", Arg.Unit (fun () -> ()), " ")
 (** list of abstract domains to enable *)
 let domains = [
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
+
+  ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
 ]
 
 (** list of domain combinators to enable *)
