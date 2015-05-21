@@ -1,7 +1,7 @@
 module L = LogicSymbolicSet
 
-let debug = true
-(*let debug = false*)
+(*let debug = true*)
+let debug = false
 
 module Make
     (D: Interface.Domain
@@ -269,8 +269,22 @@ module Make
 
   let rename_symbols map t =
     let e = U.rename map t.e in
-    let d = D.rename_symbols map t.d in
-    remap e d
+    let ren = Rename.fold (fun a a' ren ->
+        let r = U.rep a t.e in
+        let r' = U.rep a' e in
+        if r != r' && SSet.mem r t.s then
+          (r,r')::ren
+        else
+          ren
+      ) map [] in
+    let (d,s) = if ren = [] then (t.d,t.s) else 
+        let d = D.rename_symbols (Rename.of_assoc_list ren) t.d in
+        let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+        (d,s)
+    in
+    let t = {d;s;e} in
+    if debug then check "rename_symbols" t;
+    t
 
   let query t =
     {
