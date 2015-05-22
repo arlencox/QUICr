@@ -131,10 +131,14 @@ manipulating symbolic sets.  The language has the following syntax:
 ```
 k ::= x = e
     | k; k                       // sequencing two commands
+    | branch { k } else { k }    // non-deterministic branch
+    | both { k } and { k }       // execute both branches in parallel
     | if ( c ) { k }             // conditional execution
     | if ( c ) { k } else { k }
     | while ( c ) { k }          // looping
+    | loop { k }                 // non-deterministic loop
     | kill x                     // project out variable
+    | rename x y                 // rename the variable x to be variable y
     | assume ( c )               // make an assumption about state
     | assert ( c )               // check property
 
@@ -247,7 +251,7 @@ define the functor `Make`.
 
 A `.mlpack` file should be created for the domain.  This should have an
 upper-case first letter and will represent the name of the domain or combinator
-inside the main file.  Similarly, the _tags file should be updated to both
+inside the main file.  Similarly, the \_tags file should be updated to both
 indicate any dependencies for the new domain as well as adding an appropriate
 `for-pack()` line.
 
