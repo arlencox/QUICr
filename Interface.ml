@@ -58,6 +58,9 @@ module type Domain = sig
   (** [is_bottom t] returns true if [t] is the bottom element *)
   val is_bottom: t -> bool
 
+  (** [is_top t] returns true if [t] is the top element *)
+  val is_top: t -> bool
+
   (** {2 Symbol Manipulation} *)
 
   (** [forget syms t] forgets meaning of (projects out) the symbols [syms] in
@@ -65,10 +68,9 @@ module type Domain = sig
   val forget : sym list -> t -> t
 
   (** [rename_symbols f t] renames each symbol in [t] to the corresponding
-      symbol returned by looking up the symbol in the association list [f].
-      Relationships are maintained, assuming the mapping does not reuse any
-      symbols *)
-  val rename_symbols : (sym * sym) list -> t -> t
+      symbol returned by the rename structure [f].  Relationships are
+      maintained, assuming the mapping does not reuse any symbols *)
+  val rename_symbols : sym Rename.t -> t -> t
 
   (** {2 Query interface} *)
 

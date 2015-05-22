@@ -1,0 +1,4 @@
+assume(a <= b);
+assume(c <= d);
+assume(b = c);
+assert(a <= d);

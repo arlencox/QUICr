@@ -49,6 +49,8 @@ module Make(D: Interface.Domain
 
   let le = D.le
 
+  let is_top = D.is_top
+
   let is_bottom = D.is_bottom
 
   let forget = D.forget

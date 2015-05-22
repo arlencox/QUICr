@@ -23,6 +23,8 @@ let arg_blank = ("", Arg.Unit (fun () -> ()), " ")
 (** list of abstract domains to enable *)
 let domains = [
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
+
+  ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
 ]
 
 (** list of domain combinators to enable *)
@@ -45,6 +47,13 @@ let combinators = [
        push (module P)
      ), " Pack variables into multiple domain instances");
 
+  (* equality combinator *)
+  ("-eq", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Eq.Domain.Make(D) in
+       push (module P)
+     ), " Track equality constraints externally from the domain");
+
   (* debugger combinator *)
   ("-debug", Arg.Unit (fun () ->
        let module D = (val pop ()) in
@@ -52,6 +61,19 @@ let combinators = [
        push (module P)
      ), " Use debug printer");
 
+  (* singleton handler *)
+  ("-sing", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Sing.Domain.Make(D) in
+       push (module P)
+     ), " Support singleton sets");
+
+  (* statistics *)
+  ("-stats", Arg.Unit (fun () ->
+       let module D = (val pop ()) in
+       let module P = Stats.Domain.Make(D) in
+       push (module P)
+     ), " Accumulate statistics on domain operations");
 ]
 
 let usage =

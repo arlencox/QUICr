@@ -1,0 +1,4 @@
+assume(b <= c);
+assume(a = b);
+
+a = d;

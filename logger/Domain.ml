@@ -37,7 +37,8 @@ module Make(L: L)(D: Interface.Domain
   type query = int S.q
 
   let pp ff t =
-    S.pp Format.pp_print_int ff (D.serialize t.t)
+    D.pp_print Format.pp_print_int ff t.t
+    (*S.pp Format.pp_print_int ff (D.serialize t.t)*)
 
   let ppc ff c =
     S.pp Format.pp_print_int ff c
@@ -140,6 +141,13 @@ module Make(L: L)(D: Interface.Domain
     Format.fprintf t.c.ff "@]@.";
     res
 
+  let is_top t =
+    Format.fprintf t.c.ff "@[<v 2>is_top:@,";
+    Format.fprintf t.c.ff "pre: %a@," pp t;
+    let res = D.is_top t.t in
+    Format.fprintf t.c.ff "res: %b" res;
+    Format.fprintf t.c.ff "@]@.";
+    res
 
   let forget syms t =
     Format.fprintf t.c.ff "@[<v 2>forget:@,";
@@ -152,7 +160,6 @@ module Make(L: L)(D: Interface.Domain
 
   let rename_symbols map t =
     Format.fprintf t.c.ff "@[<v 2>rename_symbols:@,";
-    Format.fprintf t.c.ff "map: @[<h>%a@]@," (Format.pp_print_list (fun ff (f,t) -> Format.fprintf ff "%d->%d" f t)) map;
     Format.fprintf t.c.ff "pre : %a@," pp t;
     let res = {t with t = D.rename_symbols map t.t} in
     Format.fprintf t.c.ff "res: %a" pp res;
