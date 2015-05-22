@@ -25,6 +25,12 @@ let domains = [
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
 
   ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
+  ("-qbf", Arg.String (fun solver ->
+      let s = match solver with
+        | _ -> (module SAT.SolverDepQBF : SAT.Domain.Solver)
+      in
+      push (module SAT.Domain.Make((val s)))),
+   "solver external QBF solver-based domain");
 ]
 
 (** list of domain combinators to enable *)

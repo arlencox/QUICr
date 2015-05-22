@@ -124,6 +124,12 @@ module Make(D: Interface.Domain
     let fresh sym =
       let id = !count in
       incr count;
+      begin try
+        let oid = Hashtbl.find env sym in
+        Hashtbl.remove renv oid
+      with Not_found ->
+        ()
+      end;
       Hashtbl.replace env sym id;
       Hashtbl.replace renv id sym;
       id
