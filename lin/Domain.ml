@@ -19,6 +19,8 @@
  * some cleaning tasks for later:
  *  - moving the libraries into utility files
  *  - now type t has a single field; remove struct
+ *  - add Format printers in the maps
+ *  - move stuffs specific to set_lin in a separate module
  *)
 
 (** Maps and Sets with printers *)
@@ -74,6 +76,18 @@ module IntMap =
       List.fold_left (fun acc (k, v) -> add k v acc) empty l
   end
 module IntSet = SetMake(IntOrd)
+
+(* Printing maps and sets *)
+let gen_set_2str (c: string) (f: int -> string) (s: IntSet.t): string =
+  let _, str =
+    (IntSet.fold
+       (fun i (b, acc) ->
+         false, Printf.sprintf "%s%s%s" acc (if b then "" else c) (f i)
+       ) s (true, "")) in
+  str
+let set_setv_2str = gen_set_2str ", " (Printf.sprintf "S[%d]")
+let set_sv_2str = gen_set_2str ", " (Printf.sprintf "N[%d]")
+
 
 
 (** Module abbrevs *)
@@ -134,11 +148,83 @@ let top (): t = Some { u_lin   = IntMap.empty;
                        u_sub   = IntMap.empty;
                        u_mem   = IntMap.empty;
                        u_eqs   = IntMap.empty }
+let is_top (x: t): bool =
+  match x with
+  | None -> false
+  | Some u ->
+      u.u_lin = IntMap.empty && u.u_sub = IntMap.empty
+        && u.u_sub = IntMap.empty && u.u_eqs = IntMap.empty
+
+(* Context management *)
+let context (x: t) = ( )
+
+(* Symbols that are constrained (only those that explicitely appear) *)
+let symbols (x: t): sym list =
+  match x with
+  | None -> [ ]
+  | Some u ->
+      let f = IntMap.fold (fun i s acc -> IntSet.add i (IntSet.union s acc)) in
+      let acc = f u.u_sub (f u.u_mem (f u.u_eqs IntSet.empty)) in
+      let acc =
+        IntMap.fold
+          (fun i sl acc ->
+            IntSet.add i (IntSet.union (IntSet.union sl.sl_elts sl.sl_sets) acc)
+          ) u.u_lin acc in
+      IntSet.fold (fun i l -> i :: l) acc [ ]
+
+
+(** Basic functions over set_lin *)
+
+(* Conversion to string *)
+let sl_2str (sl: set_lin): string =
+  let lin_setv_2str = gen_set_2str " + " (Printf.sprintf "S[%d]") in
+  if sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty then
+    Printf.sprintf " = empty"
+  else
+    Printf.sprintf " = { %s } + %s" (set_sv_2str sl.sl_elts)
+      (lin_setv_2str sl.sl_sets)
+
+
+(** Pretty-printing *)
+
+(* Internal and abstract state representations are fairly close
+ * for this domain, hence we make just one pretty-printing function *)
+let pp
+    (_: Format.formatter -> sym -> unit) (* sym is int... *)
+    (ch: Format.formatter) (x: t): unit =
+  match x with
+  | None -> Format.fprintf ch "BOT\n"
+  | Some u ->
+      IntMap.iter (fun i c -> Format.fprintf ch "S[%d] = %s@\n" i (sl_2str c))
+        u.u_lin;
+      IntMap.iter
+        (fun i s ->
+          if s != IntSet.empty && i <= IntSet.min_elt s then
+            let s = IntSet.remove i s in
+            let plur = if IntSet.cardinal s > 1 then "s" else "" in
+            Format.fprintf ch "S[%d] equal to set%s %s@\n" i plur
+              (set_setv_2str s)
+        ) u.u_eqs;
+      IntMap.iter
+        (fun i s ->
+          let plur = if IntSet.cardinal s > 1 then "s" else "" in
+          Format.fprintf ch "S[%d] contains set%s: %s\n" i plur
+            (set_setv_2str s)
+        ) u.u_sub;
+      IntMap.iter
+        (fun i s ->
+          let plur = if IntSet.cardinal s > 1 then "s" else "" in
+          Format.fprintf ch "S[%d] contains element%s: %s\n" i plur
+            (set_sv_2str s)
+        ) u.u_mem
+let pp_debug = pp
+let pp_print = pp
+
+
+(** Manipulating constraints *)
 
 
 (** Functions to implement *)
-let context _ = failwith "context"
-let symbols _ = failwith "symbols"
 let constrain _ = failwith "constrain"
 let serialize _ = failwith "serialize"
 let sat _ = failwith "sat"
@@ -150,8 +236,6 @@ let forget _ = failwith "forget"
 let rename_symbols _ = failwith "rename_symbols"
 let query _ = failwith "query"
 let combine _ = failwith "combine"
-let pp_debug _ = failwith "pp_debug"
-let pp_print _ = failwith "pp_print"
 
 
 (* From now on, code being ported from MemCAD
@@ -184,18 +268,6 @@ module Set_lin =
 
 
 
-    (** Printing *)
-    let gen_set_2str (c: string) (f: int -> string) (s: IntSet.t): string =
-      let _, str =
-        (IntSet.fold
-           (fun i (b, acc) ->
-             false, Printf.sprintf "%s%s%s" acc (if b then "" else c) (f i)
-           ) s (true, "")) in
-      str
-    let set_setv_2str = gen_set_2str ", " (Printf.sprintf "S[%d]")
-    let set_sv_2str = gen_set_2str ", " (Printf.sprintf "N[%d]")
-
-
     (** Some basic functions over set_lin *)
     (* Failure to preserve linearity *)
     exception Lin_error of string
@@ -208,14 +280,6 @@ module Set_lin =
     (* Empty *)
     let sl_is_empty (sl: set_lin): bool =
       sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty
-    (* Display *)
-    let sl_2str (sl: set_lin): string =
-      let lin_setv_2str = gen_set_2str " + " (Printf.sprintf "S[%d]") in
-      if sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty then
-        Printf.sprintf " = empty\n"
-      else
-        Printf.sprintf " = { %s } + %s\n" (set_sv_2str sl.sl_elts)
-          (lin_setv_2str sl.sl_sets)
     (* Equality of set constraints *)
     let sl_eq c sl =
       IntSet.equal c.sl_elts sl.sl_elts && IntSet.equal c.sl_sets sl.sl_sets
@@ -531,43 +595,6 @@ module Set_lin =
     (** Lattice elements *)
 
     (* Pretty-printing, with indentation *)
-    let t_2stri (ind: string) (t: t): string =
-      match t.t_t with
-      | None -> Printf.sprintf "%sBOT\n" ind
-      | Some u ->
-          let lin_setv_2str = gen_set_2str " + " (Printf.sprintf "S[%d]") in
-          let acc =
-            IntMap.fold
-              (fun i c acc ->
-                if c.sl_elts = IntSet.empty && c.sl_sets = IntSet.empty then
-                  Printf.sprintf "%s%sS[%d] = empty\n" acc ind i
-                else
-                  Printf.sprintf "%s%sS[%d] = { %s } + %s\n" acc ind i
-                    (set_sv_2str c.sl_elts) (lin_setv_2str c.sl_sets)
-              ) u.u_lin "" in
-          let acc =
-            IntMap.fold
-              (fun i s acc ->
-                if s = IntSet.empty || i > IntSet.min_elt s then acc
-                else
-                  let s = IntSet.remove i s in
-                  let plur = if IntSet.cardinal s > 1 then "s" else "" in
-                  Printf.sprintf "%s%sS[%d] equal to set%s %s\n" acc ind i
-                    plur (set_setv_2str s)
-              ) u.u_eqs acc in
-          let acc =
-            IntMap.fold
-              (fun i s acc ->
-                let plur = if IntSet.cardinal s > 1 then "s" else "" in
-                Printf.sprintf "%s%sS[%d] contains set%s: %s\n" acc ind i
-                  plur (set_setv_2str s)
-              ) u.u_sub acc in
-          IntMap.fold
-            (fun i s acc ->
-              let plur = if IntSet.cardinal s > 1 then "s" else "" in
-              Printf.sprintf "%s%sS[%d] contains element%s: %s\n" acc ind i
-                plur (set_sv_2str s)
-            ) u.u_mem acc
 
 
     (** A bit of reduction, for internal use only *)
