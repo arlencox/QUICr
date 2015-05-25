@@ -651,28 +651,6 @@ let combine (q: query) (x: t) =
 
 (* From now on, code being ported from MemCAD
 
-open Data_structures
-open Lib
-
-open Nd_sig
-open Set_sig
-open Svenv_sig
-
-open Nd_utils
-open Set_utils
-
-
-(** Error handling *)
-let this_module = "set-lin"
-let error = gen_error this_module
-let todo  = gen_todo  this_module
-let warn  = gen_warn  this_module
-
-
-let debug_module = true
-
-type sv = int
-
 module Set_lin =
   (struct
     (** Some basic functions over set_lin *)
@@ -876,26 +854,9 @@ module Set_lin =
 
     (** Management of symbolic variables *)
 
-    (* For sanity check *)
-    let check_nodes (s: IntSet.t) (x: t): bool = todo "check_nodes"
-
-    (* Symbolic variables *)
-    let sv_add (sv: sv) (t: t): int * t = sv, t
     let sv_rem (sv: sv) (t: t): t =
       drop_symb_svs ((=) sv) t
 
-    (* check if a set var root *)
-    let is_setv_root (setv: sv) (t: t): bool =
-      IntSet.mem setv t.t_roots
-
-    (* collect root set variables *)
-    let setv_col_root (t: t): IntSet.t = t.t_roots
-
-    (* Set variables *)
-    let setv_add ?(root: bool = false) ?(kind: set_kind option = None) 
-        ?(name: string option = None) (setv: int) (t: t): t =
-      { t with
-        t_roots = if root then IntSet.add setv t.t_roots else t.t_roots }
     let setv_rem (setv: int) (t: t): t =
       let loc_debug = debug_module in
       if loc_debug then
@@ -909,17 +870,6 @@ module Set_lin =
       if loc_debug then
         Printf.printf "removed setv S[%d]:\n%s\n" setv (t_2stri "  " t);
       t
-
-
-    (** Comparison and join operators *)
-
-
-    (* Lower upper bound *)
-
-    (* Weak bound: serves as widening *)
-    let weak_bnd (t0: t) (t1: t): t = t_lub t0 t1
-    (* Upper bound: serves as join and widening *)
-    let upper_bnd (t0: t) (t1: t): t = t_lub t0 t1
 
 
     (** Forget (if the meaning of the sv changes) *)
