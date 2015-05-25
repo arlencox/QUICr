@@ -175,6 +175,18 @@ let symbols (x: t): sym list =
 
 (** Basic functions over set_lin *)
 
+exception Lin_error of string (* Failure to preserve linearity *)
+
+(* Empty (corresponds to empty set) *)
+let sl_empty: set_lin =
+  { sl_elts = IntSet.empty;
+    sl_sets = IntSet.empty }
+let sl_is_empty (sl: set_lin): bool =
+  sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty
+(* Other basic values (singleton, single set) *)
+let sl_one_set (i: int) = { sl_empty with sl_sets = IntSet.singleton i }
+let sl_one_elt (i: int) = { sl_empty with sl_elts = IntSet.singleton i }
+
 (* Conversion to string *)
 let sl_2str (sl: set_lin): string =
   let lin_setv_2str = gen_set_2str " + " (Printf.sprintf "S[%d]") in
@@ -183,6 +195,39 @@ let sl_2str (sl: set_lin): string =
   else
     Printf.sprintf " = { %s } + %s" (set_sv_2str sl.sl_elts)
       (lin_setv_2str sl.sl_sets)
+
+(* Equality of set constraints *)
+let sl_eq c sl =
+  IntSet.equal c.sl_elts sl.sl_elts && IntSet.equal c.sl_sets sl.sl_sets
+
+(* Adding two linear combinations of sets *)
+let sl_add (lin0: set_lin) (lin1: set_lin): set_lin =
+  if IntSet.inter lin0.sl_elts lin1.sl_elts = IntSet.empty
+      && IntSet.inter lin0.sl_sets lin1.sl_sets = IntSet.empty then
+    { sl_elts = IntSet.union lin0.sl_elts lin1.sl_elts;
+      sl_sets = IntSet.union lin0.sl_sets lin1.sl_sets }
+  else raise (Lin_error "sl_add: non disjoint constraints")
+(* Inclusion of set_lin *)
+let sl_subset (sl0: set_lin) (sl1: set_lin): bool =
+  IntSet.subset sl0.sl_elts sl1.sl_elts
+    && IntSet.subset sl0.sl_sets sl1.sl_sets
+(* Subtraction of set_lin *)
+let sl_sub (sl0: set_lin) (sl1: set_lin): set_lin =
+  if IntSet.subset sl1.sl_elts sl0.sl_elts
+      && IntSet.subset sl1.sl_sets sl0.sl_sets then
+    { sl_elts = IntSet.diff sl0.sl_elts sl1.sl_elts;
+      sl_sets = IntSet.diff sl0.sl_sets sl1.sl_sets }
+  else raise (Lin_error "sl_sub: non disjoint constraints")
+
+(* Linearization of an expression into a set_lin *)
+let linearize (ex: int L.e): set_lin option =
+  let rec aux = function
+    | L.Empty -> sl_empty
+    | L.Sing i -> sl_one_elt i
+    | L.Var i -> sl_one_set i
+    | L.DisjUnion (e0, e1) -> sl_add (aux e0) (aux e1)
+    | _ -> raise (Lin_error "unsupported construction") in
+  try Some (aux ex) with Lin_error _ -> None
 
 
 (** Pretty-printing *)
@@ -219,23 +264,238 @@ let pp
         ) u.u_mem
 let pp_debug = pp
 let pp_print = pp
+let pp_sym ch i = Format.fprintf ch "%d" i
 
 
 (** Manipulating constraints *)
 
+(* Fast access to constraints *)
+let u_get_sub (u: u) (i: int): IntSet.t = (* subsets of i *)
+  try IntMap.find i u.u_sub with Not_found -> IntSet.empty
+let u_get_mem (u: u) (i: int): IntSet.t = (* elements of i *)
+  try IntMap.find i u.u_mem with Not_found -> IntSet.empty
+let u_get_eqs (u: u) (i: int): IntSet.t = (* sets equal to *)
+  try IntMap.find i u.u_eqs with Not_found -> IntSet.singleton i
 
-(** Functions to implement *)
-let constrain _ = failwith "constrain"
-let serialize _ = failwith "serialize"
-let sat _ = failwith "sat"
+(* Helper functions to add basic constraints *)
+let u_add_inclusion (u: u) (i: int) (j: int): u = (* i included in j *)
+  let osub = u_get_sub u j in
+  { u with u_sub = IntMap.add j (IntSet.add i osub) u.u_sub }
+let u_add_mem (u: u) (i: int) (j: int): u = (* i is an element of j *)
+  let omem = u_get_mem u j in
+  { u with u_mem = IntMap.add j (IntSet.add i omem) u.u_mem }
+let u_add_eq (u: u) (i: int) (j: int): u = (* i = j *)
+  let c = IntSet.union (u_get_eqs u i) (u_get_eqs u j) in
+  { u with u_eqs = IntSet.fold (fun i -> IntMap.add i c) c u.u_eqs }
+let u_add_lin (u: u) (i: int) (sl: set_lin): u = (* i = sl *)
+  (* a bit of reduction: search of all other equalities to sl *)
+  let u =
+    IntMap.fold
+      (fun j0 sl0 acc ->
+        if sl_eq sl sl0 then u_add_eq u i j0
+        else u
+      ) u.u_lin u in
+  if IntMap.mem i u.u_lin then
+    Printf.printf "WARN,u_add_lin: over-writing constraint";
+  { u with u_lin = IntMap.add i sl u.u_lin }
+
+(* Guard operator, adds a new constraint *)
+let constrain (c: cnstr) (x: t): t =
+  match x with
+  | None -> x
+  | Some u ->
+      let u =
+        (* Basic constraints added using the utility functions:
+         *  all constraints needed in the graph examples are supported,
+         *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
+         *  constraints should just not arise here! *)
+        match c with
+        | L.In (i, L.Var j) ->
+            u_add_mem u i j
+        | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
+            if IntMap.mem i u.u_lin then
+              Printf.printf "WARN,constrain: existing linear constraint";
+            let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
+            { u with u_lin = IntMap.add i cons u.u_lin }
+        | L.Eq (L.Var i, L.Var j) ->
+            u_add_eq u i j
+        | L.Eq (L.Var i, L.DisjUnion (L.Var j, L.Var k))
+        | L.Eq (L.DisjUnion (L.Var j, L.Var k), L.Var i) ->
+            u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
+                            sl_elts = IntSet.empty }
+        | L.Eq (L.Var i, L.Sing j) | L.Eq (L.Sing j, L.Var i)
+        | L.Eq (L.Var i, L.DisjUnion (L.Empty, L.Sing j))
+        | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Empty)) ->
+            u_add_lin u i { sl_sets = IntSet.empty;
+                            sl_elts = IntSet.singleton j }
+        | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
+            u_add_lin u i { sl_sets = IntSet.singleton k;
+                            sl_elts = IntSet.singleton j }
+        | L.Eq (L.Var i, e) ->
+            begin
+              match linearize e with
+              | Some lin -> u_add_lin u i lin
+              | None ->
+                  Printf.printf "WARN,constrain: linearization failed";
+                  u
+            end
+        | L.SubEq (L.Var i, L.Var j) ->
+            (* TODO: there seem to be a bug in the inclusion order,
+             *   that is, constraints seem to appear in the reverse
+             *   order than they should *)
+            (*if debug_module then
+              Printf.printf "inclusion: %d <= %d\n" i j;*)
+            u_add_inclusion u i j
+        | _ ->
+            (* otherwise, we just drop the constraint *)
+            Format.eprintf "WARN,constrain,ignored: %a" (L.pp pp_sym) c;
+            u in
+      Some u
+
+(* Helper functions to check basic constraints *)
+exception Stop of bool
+(* a closure function: inputs Si, and returns all Sj found to be
+ *  contained in Si, using equality and inclusion constraints *)
+let closure_subsets (u: u) (i: int): IntSet.t =
+  let add acc s =
+    IntSet.fold
+      (fun i (nvs, acc) ->
+        if IntSet.mem i acc then nvs, acc
+        else i :: nvs, IntSet.add i acc
+      ) s ([ ], acc) in
+  let rec aux acc s =
+    let nvs, acc = add acc s in
+    if nvs = [ ] then acc
+    else
+      let acc, next =
+        List.fold_left
+          (fun (old, n) j ->
+            IntSet.add j old,
+            IntSet.union (u_get_eqs u j) (IntSet.union (u_get_sub u j) n)
+          ) (acc, IntSet.empty) nvs in
+      aux acc next in
+  aux IntSet.empty (IntSet.singleton i)
+(* does u entail that i \in j ? *)
+let u_sat_mem (u: u) i j =
+  try
+    if IntSet.mem i (u_get_mem u j) then raise (Stop true);
+    (* look at sets equal to j, and gather their known elements *)
+    let smems = closure_subsets u j in
+    let elems =
+      IntSet.fold
+        (fun i acc -> IntSet.union (u_get_mem u i) acc) smems IntSet.empty in
+    if IntSet.mem i elems then raise (Stop true);
+    if IntSet.mem i (IntMap.find j u.u_lin).sl_elts then raise (Stop true);
+    false
+  with
+  | Stop b -> b
+  | Not_found -> false
+(* does u entail i <= j ? (i subset of j) *)
+let u_sat_sub (u: u) i j =
+  let i0 = u_get_eqs u i and j0 = u_get_eqs u j in
+  let jsubsets =
+    IntSet.fold (fun jj acc -> IntSet.union acc (u_get_sub u jj)) j0
+      IntSet.empty in
+  IntSet.inter i0 jsubsets != IntSet.empty
+(* does u entail that i in ex *)
+let u_sat_mem_ex (u: u) i ex =
+  let rec aux_mem = function
+    | L.Empty -> false
+    | L.Sing j -> i = j
+    | L.Var j -> u_sat_mem u i j
+    | L.DisjUnion (e0, e1) | L.Union (e0, e1) -> aux_mem e0 || aux_mem e1
+    | _ -> false in
+  if aux_mem ex then true
+  else
+    match linearize ex with
+    | Some lin ->
+        (* we look for sets that include this linearized expression,
+         * and try to verify membership on them *)
+        begin
+          try
+            IntMap.iter
+              (fun j sl ->
+                if sl_subset lin sl && u_sat_mem u i j then raise (Stop true)
+              ) u.u_lin;
+            false
+          with Stop b -> b
+        end
+    | None -> false (* we give up *)
+(* can we find a constraint that ensures i is empty ? *)
+let u_has_empty_ctr (u: u) (i: int): bool =
+  try
+    let sl = IntMap.find i u.u_lin in
+    sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty
+  with Not_found -> false
+(* is i empty ? *)
+let u_sat_empty (u: u) i =
+  IntSet.exists (fun i -> u_has_empty_ctr u i) (u_get_eqs u i)
+(* does u entail i=j ? *)
+let u_sat_eq (u: u) i j =
+  IntSet.mem i (u_get_eqs u j) || IntSet.mem j (u_get_eqs u i)
+(* does constraint "i=sl" exist in u ? *)
+let u_sat_lin (u: u) i sl =
+  try (* NB: precision can be improved by looking at set equalities *)
+    let c = IntMap.find i u.u_lin in
+    sl_eq c sl
+  with Not_found ->
+    if IntSet.is_empty sl.sl_elts then
+      let sl_sets =
+        IntSet.fold
+          (fun i acc ->
+            if u_sat_empty u i then acc
+            else IntSet.add i acc
+          ) sl.sl_sets IntSet.empty in
+      if IntSet.cardinal sl_sets = 1 then
+        u_sat_eq u (IntSet.choose sl_sets) i
+      else false
+    else false
+
+(* Sat operator, checks whether a constraint is implied by an abstract state *)
+let sat (x: t) (c: cnstr): bool =
+  match x with
+  | None -> true (* any constraint valid under _|_ *)
+  | Some u ->
+      (* trying to support the same constraints as in guard *)
+      match c with
+      | L.In (i, ex) -> u_sat_mem_ex u i ex
+      | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
+      | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
+      | L.Eq (L.Var i, ex) | L.Eq (ex, L.Var i) ->
+          begin
+            match linearize ex with
+              | None -> false
+              | Some lin -> u_sat_lin u i lin
+          end
+      | _ -> false
+
+let serialize (x: t): output =
+  Printf.printf "WARN: query will return default, imprecise result\n";
+  L.True
+
+
+(** Manipulating symbols *)
+let forget _ = failwith "forget"
+let rename_symbols _ = failwith "rename_symbols"
+
+
+(** Lattice binary operations *)
 let join _ = failwith "join"
 let widening _ = failwith "widening"
 let meet _ = failwith "meet"
 let le _ = failwith "le"
-let forget _ = failwith "forget"
-let rename_symbols _ = failwith "rename_symbols"
-let query _ = failwith "query"
-let combine _ = failwith "combine"
+
+
+(** Interface for reduction *)
+
+(* For now, this domain still offers no facility for reduction *)
+let query (x: t): query =
+  Printf.printf "WARN: query will return default, imprecise result\n";
+  { L.get_eqs     = (fun ( ) -> [ ]);
+    L.get_eqs_sym = (fun _ -> [ ]); }
+let combine (q: query) (x: t) =
+  Printf.printf "WARN: combine will return default, imprecise result\n";
+  x
 
 
 (* From now on, code being ported from MemCAD
@@ -264,56 +524,11 @@ type sv = int
 
 module Set_lin =
   (struct
-
-
-
-
     (** Some basic functions over set_lin *)
-    (* Failure to preserve linearity *)
-    exception Lin_error of string
-    (* Basic values *)
-    let sl_empty: set_lin =
-      { sl_elts = IntSet.empty;
-        sl_sets = IntSet.empty }
-    let sl_one_set (i: int) = { sl_empty with sl_sets = IntSet.singleton i }
-    let sl_one_elt (i: int) = { sl_empty with sl_elts = IntSet.singleton i }
-    (* Empty *)
-    let sl_is_empty (sl: set_lin): bool =
-      sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty
-    (* Equality of set constraints *)
-    let sl_eq c sl =
-      IntSet.equal c.sl_elts sl.sl_elts && IntSet.equal c.sl_sets sl.sl_sets
-    (* Adding two linear combinations of sets *)
-    let sl_add (lin0: set_lin) (lin1: set_lin): set_lin =
-      if IntSet.inter lin0.sl_elts lin1.sl_elts = IntSet.empty
-          && IntSet.inter lin0.sl_sets lin1.sl_sets = IntSet.empty then
-        { sl_elts = IntSet.union lin0.sl_elts lin1.sl_elts;
-          sl_sets = IntSet.union lin0.sl_sets lin1.sl_sets }
-      else raise (Lin_error "sl_add: non disjoint constraints")
-    (* Inclusion of set_lin *)
-    let sl_subset (sl0: set_lin) (sl1: set_lin): bool =
-      IntSet.subset sl0.sl_elts sl1.sl_elts
-        && IntSet.subset sl0.sl_sets sl1.sl_sets
-    (* Subtraction of set_lin *)
-    let sl_sub (sl0: set_lin) (sl1: set_lin): set_lin =
-      if IntSet.subset sl1.sl_elts sl0.sl_elts
-          && IntSet.subset sl1.sl_sets sl0.sl_sets then
-        { sl_elts = IntSet.diff sl0.sl_elts sl1.sl_elts;
-          sl_sets = IntSet.diff sl0.sl_sets sl1.sl_sets }
-      else raise (Lin_error "sl_sub: non disjoint constraints")
     (* Just a setv *)
     let sl_setv (setv: int): set_lin =
       { sl_elts = IntSet.empty;
         sl_sets = IntSet.singleton setv }
-    (* Linearization of an expression into a set_lin *)
-    let linearize (ex: set_expr): set_lin option =
-      let rec aux = function
-        | S_empty -> sl_empty
-        | S_node i -> sl_one_elt i
-        | S_var i -> sl_one_set i
-        | S_union (_, _) -> raise (Lin_error "union")
-        | S_uplus (e0, e1) -> sl_add (aux e0) (aux e1) in
-      try Some (aux ex) with Lin_error _ -> None
     (* Selection of the most general set_lin: (1) fewer elts, (2) fewer sets *)
     let sl_more_gen (sl0: set_lin) (sl1: set_lin): set_lin =
       let default ( ) = warn "bad case"; sl1 in
@@ -455,141 +670,9 @@ module Set_lin =
       | None -> false
       | Some u -> u_is_top u
 
-    (* Fast access to constraints *)
-    let u_get_sub (u: u) (i: int): IntSet.t = (* subsets of i *)
-      try IntMap.find i u.u_sub with Not_found -> IntSet.empty
-    let u_get_mem (u: u) (i: int): IntSet.t = (* elements of i *)
-      try IntMap.find i u.u_mem with Not_found -> IntSet.empty
-    let u_get_eqs (u: u) (i: int): IntSet.t = (* sets equal to *)
-      try IntMap.find i u.u_eqs with Not_found -> IntSet.singleton i
-
-    (* Adding some constraints *)
-    (* TODO: add some reduction over abstract values (none for now) *)
-    let u_add_inclusion (u: u) (i: int) (j: int): u = (* i included in j *)
-      let osub = u_get_sub u j in
-      { u with u_sub = IntMap.add j (IntSet.add i osub) u.u_sub }
-    let u_add_mem (u: u) (i: int) (j: int): u = (* i is an element of j *)
-      let omem = u_get_mem u j in
-      { u with u_mem = IntMap.add j (IntSet.add i omem) u.u_mem }
-    let u_add_eq (u: u) (i: int) (j: int): u = (* i = j *)
-      let c = IntSet.union (u_get_eqs u i) (u_get_eqs u j) in
-      { u with u_eqs = IntSet.fold (fun i -> IntMap.add i c) c u.u_eqs }
-    let u_add_lin (u: u) (i: int) (sl: set_lin): u = (* i = sl *)
-      (* a bit of reduction: search of all other equalities to sl *)
-      let u =
-        IntMap.fold
-          (fun j0 sl0 acc ->
-            if sl_eq sl sl0 then u_add_eq u i j0
-            else u
-          ) u.u_lin u in
-      if IntMap.mem i u.u_lin then warn "over-writing constraint";
-      { u with u_lin = IntMap.add i sl u.u_lin }
 
     (* Checking whether an abstract value entails some constraint *)
-    exception Stop of bool
-    (* a closure function: inputs Si, and returns all Sj found to be
-     *  contained in Si, using equality and inclusion constraints *)
-    let closure_subsets (u: u) (i: int): IntSet.t =
-      let add acc s =
-        IntSet.fold
-          (fun i (nvs, acc) ->
-            if IntSet.mem i acc then nvs, acc
-            else i :: nvs, IntSet.add i acc
-          ) s ([ ], acc) in
-      let rec aux acc s =
-        let nvs, acc = add acc s in
-        if nvs = [ ] then acc
-        else
-          let acc, next =
-            List.fold_left
-              (fun (old, n) j ->
-                IntSet.add j old,
-                IntSet.union (u_get_eqs u j) (IntSet.union (u_get_sub u j) n)
-              ) (acc, IntSet.empty) nvs in
-          aux acc next in
-      aux IntSet.empty (IntSet.singleton i)
-    (* does u entail that i \in j ? *)
-    let u_sat_mem (u: u) i j =
-      if debug_module then
-        Printf.printf "looking for membership(N[%d] in S[%d])\n" i j;
-      try
-        if IntSet.mem i (u_get_mem u j) then raise (Stop true);
-        (* look at sets equal to j, and gather their known elements *)
-        let smems = closure_subsets u j in
-        if debug_module then Printf.printf "subsets: %s\n" (intset_2str smems);
-        let elems =
-          IntSet.fold
-            (fun i acc -> IntSet.union (u_get_mem u i) acc) smems IntSet.empty in
-        if debug_module then
-          Printf.printf " considering: %s\n" (set_sv_2str elems);
-        if IntSet.mem i elems then raise (Stop true);
-        if IntSet.mem i (IntMap.find j u.u_lin).sl_elts then raise (Stop true);
-        false
-      with
-      | Stop b -> b
-      | Not_found -> false
-    (* can we find a constraint that ensures i is empty ? *)
-    let u_has_empty_ctr (u: u) (i: int): bool =
-      try
-        let sl = IntMap.find i u.u_lin in
-        sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty
-      with Not_found -> false
-    (* is i empty ? *)
-    let u_sat_empty (u: u) i =
-      IntSet.fold (fun i acc -> acc || u_has_empty_ctr u i)
-        (u_get_eqs u i) false
-    (* does u entail i=j ? *)
-    let u_sat_eq (u: u) i j =
-      IntSet.mem i (u_get_eqs u j) || IntSet.mem j (u_get_eqs u i)
-    (* does constraint "i=sl" exist in u ? *)
-    let u_sat_lin (u: u) i sl =
-      try (* TODO: improve by looking at set equalities *)
-        let c = IntMap.find i u.u_lin in
-        sl_eq c sl
-      with Not_found ->
-        if IntSet.is_empty sl.sl_elts then
-          let sl_sets =
-            IntSet.fold
-              (fun i acc ->
-                if u_sat_empty u i then acc
-                else IntSet.add i acc
-              ) sl.sl_sets IntSet.empty in
-          if IntSet.cardinal sl_sets = 1 then
-            u_sat_eq u (IntSet.choose sl_sets) i
-          else false
-        else false
 
-    (* does u entail i <= j ? (i subset of j) *)
-    let u_sat_sub (u: u) i j =
-      let i0 = u_get_eqs u i and j0 = u_get_eqs u j in
-      let jsubsets =
-        IntSet.fold (fun jj acc -> IntSet.union acc (u_get_sub u jj)) j0
-          IntSet.empty in
-      IntSet.inter i0 jsubsets != IntSet.empty
-    (* does u entail that i in ex *)
-    let u_sat_mem_ex (u: u) i ex =
-      let rec aux_mem = function
-        | S_empty -> false
-        | S_node j -> i = j
-        | S_var j -> u_sat_mem u i j
-        | S_uplus (e0, e1) | S_union (e0, e1) -> aux_mem e0 || aux_mem e1 in
-      if aux_mem ex then true
-      else
-        match linearize ex with
-        | Some lin ->
-            (* we look for sets that include this linearized expression,
-             * and try to verify membership on them *)
-            begin
-              try
-                IntMap.iter
-                  (fun j sl ->
-                    if sl_subset lin sl && u_sat_mem u i j then
-                      raise (Stop true)
-                  ) u.u_lin;
-                false
-              with Stop b -> b
-            end
-        | None -> false (* we give up *)
 
 
     (** Lattice elements *)
@@ -878,85 +961,9 @@ module Set_lin =
     let upper_bnd (t0: t) (t1: t): t = t_lub t0 t1
 
 
-    (** Set satisfiability *)
-    let set_sat (c: set_cons) (t: t): bool =
-      if debug_module then
-        Printf.printf "Set sat called: %s\n%s" (Set_utils.set_cons_2str c)
-          (t_2stri "    " t);
-      let fail ( ) =
-        Printf.printf "Set state:\n%s" (t_2stri "   " t);
-        warn (Printf.sprintf "Sat constraint dropped: %s"
-                (set_cons_2str c));
-        false in
-      let r =
-        match t.t_t with
-        | None -> true (* any constraint valid under _|_ *)
-        | Some u ->
-            (* trying to support the same constraints as in guard *)
-            match c with
-            | S_mem (i, ex) -> u_sat_mem_ex u i ex
-            | S_eq (S_var i, S_var j) -> u_sat_eq u i j
-            | S_subset (S_var i, S_var j) -> u_sat_sub u i j
-            | S_eq (S_var i, ex) | S_eq (ex, S_var i) ->
-                begin
-                  match linearize ex with
-                  | None -> fail ( )
-                  | Some lin -> u_sat_lin u i lin
-                end
-            | _ -> fail ( ) in
-      if debug_module then Printf.printf "set_sat returns: %b\n" r;
-      r
-
 
     (** Set condition test *)
     let set_guard_aux (c: set_cons) (t: t): t =
-      match t.t_t with
-      | None -> t
-      | Some u ->
-          let u =
-            (* Basic constraints added using the utility functions:
-             *  all constraints needed in the graph examples are supported,
-             *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
-             *  constraints should just not arise here! *)
-            match c with
-            | S_mem (i, S_var j) ->
-                u_add_mem u i j
-            | S_eq (S_var i, S_empty) | S_eq (S_empty, S_var i) ->
-                if IntMap.mem i u.u_lin then warn "lin, already here";
-                let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
-                { u with u_lin = IntMap.add i cons u.u_lin }
-            | S_eq (S_var i, S_var j) ->
-                u_add_eq u i j
-            | S_eq (S_var i, S_uplus (S_var j, S_var k))
-            | S_eq (S_uplus (S_var j, S_var k), S_var i) ->
-                u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
-                                sl_elts = IntSet.empty }
-            | S_eq (S_var i, S_node j) | S_eq (S_node j, S_var i)
-            | S_eq (S_var i, S_uplus (S_empty, S_node j))
-            | S_eq (S_var i, S_uplus (S_node j, S_empty)) ->
-                u_add_lin u i { sl_sets = IntSet.empty;
-                                sl_elts = IntSet.singleton j }
-            | S_eq (S_var i, S_uplus (S_node j, S_var k)) ->
-                u_add_lin u i { sl_sets = IntSet.singleton k;
-                                sl_elts = IntSet.singleton j }
-            | S_eq (S_var i, e) ->
-                begin
-                  match linearize e with
-                  | Some lin -> u_add_lin u i lin
-                  | None -> warn "Set_guard: linearization failed; dropping"; u
-                end
-            | S_subset (S_var i, S_var j) ->
-                (* TODO: there seem to be a bug in the inclusion order,
-                 *   that is, constraints seem to appear in the reverse
-                 *   order than they should *)
-                if debug_module then
-                  Printf.printf "inclusion: %d <= %d\n" i j;
-                u_add_inclusion u i j
-            | _ ->
-                (* otherwise, we just drop the constraint *)
-                warn (Printf.sprintf "Set_guard ignored: %s" (set_cons_2str c));
-                u in
-          { t with t_t = Some u }
     let set_guard (c: set_cons) (t: t): t =
       let gt = set_guard_aux c t in
       if debug_module then
