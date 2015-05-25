@@ -480,9 +480,130 @@ let rename_symbols _ = failwith "rename_symbols"
 
 
 (** Lattice binary operations *)
-let join _ = failwith "join"
-let widening _ = failwith "widening"
-let meet _ = failwith "meet"
+
+(* Join returns an abstract over-approx of the lub *)
+let join (x0: t) (x1: t): t =
+  let u_lub (u0: u) (u1: u): u =
+    (* A useful generalization:
+     *   (S0 = S1 /\ S2 = empty) \/ (S0 = {x} + S1 /\ S2 = {x})
+     *           = (S0 = S2 + S1)
+     * To do it, we first compute singletons in both sides
+     * Then, we compute lists of generalized constraints
+     *
+     * List of equalities that could be added *)
+    let generalize_sngs (u: u): (int * set_lin) list =
+      (* singletons: set => { elt } *)
+      let compute_singletons (u: u): int IntMap.t * set_lin IntMap.t =
+        IntMap.fold
+          (fun i sl (acc, rem) ->
+            if sl.sl_sets = IntSet.empty
+                && IntSet.cardinal sl.sl_elts = 1 then
+              IntMap.add (IntSet.min_elt sl.sl_elts) i acc,
+              IntMap.remove i rem
+            else acc, rem
+          ) u.u_lin (IntMap.empty, u.u_lin) in
+      let sngs, rem = compute_singletons u in
+      let l =
+        IntMap.fold
+          (fun i sl acc ->
+            if IntSet.cardinal sl.sl_elts = 1 then
+              let x = IntSet.min_elt sl.sl_elts in
+              try
+                let j = IntMap.find x sngs in
+                (i, { sl_elts = IntSet.remove x sl.sl_elts;
+                      sl_sets = IntSet.add j sl.sl_sets; } ) :: acc
+              with Not_found -> acc
+            else acc
+          ) rem [ ] in
+      if debug_module then
+        Printf.printf "reduced constraints: %d\n" (List.length l);
+      l in
+    let compute_emptys (u: u) =
+      IntMap.fold
+        (fun i sl acc -> if sl_is_empty sl then IntSet.add i acc else acc)
+        u.u_lin IntSet.empty in
+    let gen0 = generalize_sngs u0 and gen1 = generalize_sngs u1 in
+    let emp0 = compute_emptys u0 and emp1 = compute_emptys u1 in
+    (* generalized equalities of set a, emptys of set b, element of side b *)
+    let generalize (gena: (int * set_lin) list) (empb: IntSet.t) (ub: u) =
+      List.fold_left
+        (fun acc (i, sl) ->
+          if sl.sl_elts = IntSet.empty then
+            let rec_sets =
+              IntSet.fold
+                (fun i acc ->
+                  if IntSet.mem i empb then IntSet.remove i acc else acc
+                ) sl.sl_sets sl.sl_sets in
+            if IntSet.cardinal rec_sets = 1 then
+              let x = IntSet.min_elt rec_sets in
+              (* means we have equality x = i *)
+              let b = u_sat_eq ub i x in
+              if debug_module then
+                Printf.printf "suggests equality S%d = S%d => %b\n" i x b;
+              (i, sl) :: acc
+            else acc
+          else acc
+        ) [ ] gena in
+    let lineqs_to_add = generalize gen0 emp1 u1 @ generalize gen1 emp0 u0 in
+    let lin =
+      IntMap.fold
+        (fun i sl0 acc ->
+          try
+            let sl1 = IntMap.find i u1.u_lin in
+            if sl_eq sl0 sl1 then IntMap.add i sl0 acc else acc
+          with Not_found -> acc
+        ) u0.u_lin IntMap.empty in
+    let lin =
+      List.fold_left
+        (fun acc (i, sl) ->
+          if IntMap.mem i acc then
+            failwith "join: cannot add two lin constraints for a same variable!"
+          else IntMap.add i sl acc
+        ) lin lineqs_to_add in
+    let lin =
+      IntMap.fold
+        (fun i sl acc ->
+          if not (IntMap.mem i lin) && u_sat_lin u0 i sl then
+            IntMap.add i sl acc
+          else acc
+        ) u1.u_lin lin in
+    let eqs =
+      IntMap.fold
+        (fun i eqs0 acc ->
+          let eqs = IntSet.inter eqs0 (u_get_eqs u1 i) in
+          if IntSet.cardinal eqs <= 1 then acc (* only i ! *)
+          else IntMap.add i eqs acc
+        ) u0.u_eqs IntMap.empty in
+    let mem =
+      IntMap.fold
+        (fun i mem0 acc ->
+          let mem = IntSet.inter mem0 (u_get_mem u1 i) in
+          if mem = IntSet.empty then acc
+          else IntMap.add i mem acc
+        ) u0.u_mem IntMap.empty in
+    let sub =
+      IntMap.fold
+        (fun i sub0 acc ->
+          let sub = IntSet.inter sub0 (u_get_sub u1 i) in
+          if sub = IntSet.empty then acc
+          else IntMap.add i sub acc
+        ) u0.u_sub IntMap.empty in
+    { u_lin = lin;
+      u_eqs = eqs;
+      u_mem = mem;
+      u_sub = sub } in
+  match x0, x1 with
+  | None, _ -> x1
+  | _, None -> x0
+  | Some u0, Some u1 -> Some (u_lub u0 u1)
+
+(* Join also acts as a widening *)
+let widening: t -> t -> t = join
+
+(* Intersection *)
+let meet (x0: t) (x1: t): t =
+  Printf.printf "WARN: meet will return default, imprecise result (1st arg)\n";
+  x0
 
 (* Inclusion checking *)
 let le (x0: t) (x1: t): bool =
@@ -794,129 +915,6 @@ module Set_lin =
 
 
     (* Lower upper bound *)
-    let u_lub (u0: u) (u1: u): u =
-      (* A useful generalization:
-       *   (S0 = S1 /\ S2 = empty) \/ (S0 = {x} + S1 /\ S2 = {x})
-       *           = (S0 = S2 + S1)
-       * To do it, we first compute singletons in both sides
-       * Then, we compute lists of generalized constraints
-       *
-       * List of equalities that could be added *)
-      let generalize_sngs (u: u): (int * set_lin) list =
-        (* singletons: set => { elt } *)
-        let compute_singletons (u: u): (int, int) Bi_fun.t * set_lin IntMap.t =
-          IntMap.fold
-            (fun i sl (acc, rem) ->
-              if sl.sl_sets = IntSet.empty
-                  && IntSet.cardinal sl.sl_elts = 1 then
-                Bi_fun.add i (IntSet.min_elt sl.sl_elts) acc,
-                IntMap.remove i rem
-              else acc, rem
-            ) u.u_lin (Bi_fun.empty, u.u_lin) in
-        let sngs, rem = compute_singletons u in
-        let l =
-          IntMap.fold
-            (fun i sl acc ->
-              if IntSet.cardinal sl.sl_elts = 1 then
-                let x = IntSet.min_elt sl.sl_elts in
-                match Bi_fun.inverse_opt x sngs with
-                | None -> acc
-                | Some j -> (i, { sl_elts = IntSet.remove x sl.sl_elts;
-                                  sl_sets = IntSet.add j sl.sl_sets; } ) :: acc
-              else acc
-            ) rem [ ] in
-        if debug_module then
-          Printf.printf "reduced constraints: %d\n" (List.length l);
-        l in
-      let compute_emptys (u: u) =
-        IntMap.fold
-          (fun i sl acc -> if sl_is_empty sl then IntSet.add i acc else acc)
-          u.u_lin IntSet.empty in
-      let gen0 = generalize_sngs u0 and gen1 = generalize_sngs u1 in
-      let emp0 = compute_emptys u0 and emp1 = compute_emptys u1 in
-      (* generalized equalities of set a, emptys of set b, element of side b *)
-      let generalize (gena: (int * set_lin) list) (empb: IntSet.t) (ub: u) =
-        List.fold_left
-          (fun acc (i, sl) ->
-            if sl.sl_elts = IntSet.empty then
-              let rec_sets =
-                IntSet.fold
-                  (fun i acc ->
-                    if IntSet.mem i empb then IntSet.remove i acc else acc
-                  ) sl.sl_sets sl.sl_sets in
-              if IntSet.cardinal rec_sets = 1 then
-                let x = IntSet.min_elt rec_sets in
-                (* means we have equality x = i *)
-                let b = u_sat_eq ub i x in
-                if debug_module then
-                  Printf.printf "suggests equality S%d = S%d => %b\n" i x b;
-                (i, sl) :: acc
-              else acc
-            else acc
-          ) [ ] gena in
-      let lineqs_to_add = generalize gen0 emp1 u1 @ generalize gen1 emp0 u0 in
-      (* TODO: we may want to do some more reduction before we run join *)
-      let lin =
-        IntMap.fold
-          (fun i sl0 acc ->
-            try
-              let sl1 = IntMap.find i u1.u_lin in
-              if sl_eq sl0 sl1 then IntMap.add i sl0 acc else acc
-            with Not_found -> acc
-          ) u0.u_lin IntMap.empty in
-      let lin =
-        List.fold_left
-          (fun acc (i, sl) ->
-            if IntMap.mem i acc then error "already here!"
-            else IntMap.add i sl acc
-          ) lin lineqs_to_add in
-      (* XR: small local precision improvement;
-       *   - it solves the graph-16 problem with set domain precision
-       *     (yet, then, graph-16 fails later, in unfolding, and I could
-       *      still not check why)
-       *   - but it acutally also breaks graph-02
-       *     This is bad, but it is a good example for non monoticity of
-       *     static analysis: you improve precision somewhere, and it gets
-       *     worse somewhere else... Tough life... :-)
-       *     I will need to investigate! *)
-      let lin =
-        IntMap.fold
-          (fun i sl acc ->
-            if not (IntMap.mem i lin) && u_sat_lin u0 i sl then
-              IntMap.add i sl acc
-            else acc
-          ) u1.u_lin lin in
-      let eqs =
-        IntMap.fold
-          (fun i eqs0 acc ->
-            let eqs = IntSet.inter eqs0 (u_get_eqs u1 i) in
-            if IntSet.cardinal eqs <= 1 then acc (* only i ! *)
-            else IntMap.add i eqs acc
-          ) u0.u_eqs IntMap.empty in
-      let mem =
-        IntMap.fold
-          (fun i mem0 acc ->
-            let mem = IntSet.inter mem0 (u_get_mem u1 i) in
-            if mem = IntSet.empty then acc
-            else IntMap.add i mem acc
-          ) u0.u_mem IntMap.empty in
-      let sub =
-        IntMap.fold
-          (fun i sub0 acc ->
-            let sub = IntSet.inter sub0 (u_get_sub u1 i) in
-            if sub = IntSet.empty then acc
-            else IntMap.add i sub acc
-          ) u0.u_sub IntMap.empty in
-      { u_lin = lin;
-        u_eqs = eqs;
-        u_mem = mem;
-        u_sub = sub }
-    let t_lub (t0: t) (t1: t): t =
-      (* TODO: we should check consistency of t_roots ! *)
-      match t0.t_t, t1.t_t with
-      | None, _ -> t1
-      | _, None -> t0
-      | Some u0, Some u1 -> { t0 with t_t = Some (u_lub u0 u1) }
 
     (* Weak bound: serves as widening *)
     let weak_bnd (t0: t) (t1: t): t = t_lub t0 t1
