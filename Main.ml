@@ -25,6 +25,8 @@ let domains = [
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
 
   ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
+
+  ("-lin", Arg.Unit (fun () -> push (module Lin.Domain)), " Lin set domain")
 ]
 
 (** list of domain combinators to enable *)
