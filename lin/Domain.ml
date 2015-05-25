@@ -470,7 +470,7 @@ let sat (x: t) (c: cnstr): bool =
       | _ -> false
 
 let serialize (x: t): output =
-  Printf.printf "WARN: query will return default, imprecise result\n";
+  Printf.printf "WARN: serialize will return default, imprecise result\n";
   L.True
 
 
@@ -483,7 +483,37 @@ let rename_symbols _ = failwith "rename_symbols"
 let join _ = failwith "join"
 let widening _ = failwith "widening"
 let meet _ = failwith "meet"
-let le _ = failwith "le"
+
+(* Inclusion checking *)
+let le (x0: t) (x1: t): bool =
+  let module M = struct exception Abort end in
+  (* are all constraints of u1 true in u0 ? *)
+  let u_is_le (u0: u) (u1: u): bool =
+    try
+      IntMap.iter
+        (fun i sl1 ->
+          if not (sl_eq sl1 (IntMap.find i u0.u_lin)) then raise M.Abort
+        ) u1.u_lin;
+      IntMap.iter
+        (fun i elts1 ->
+          if not (IntSet.subset elts1 (u_get_mem u0 i)) then raise M.Abort
+        ) u1.u_mem;
+      IntMap.iter
+        (fun i sub1 ->
+          if not (IntSet.subset sub1 (u_get_sub u0 i)) then raise M.Abort
+        ) u1.u_sub;
+      IntMap.iter
+        (fun i eqs1 ->
+          if not (IntSet.subset eqs1 (u_get_eqs u0 i)) then raise M.Abort
+        ) u1.u_eqs;
+      true
+    with
+    | Not_found -> false
+    | M.Abort -> false in
+  match x0, x1 with
+  | None, _ -> true
+  | Some _, None -> false
+  | Some u0, Some u1 -> u_is_le u0 u1
 
 
 (** Interface for reduction *)
@@ -647,38 +677,6 @@ module Set_lin =
                                 u_mem = mem;
                                 u_eqs = eqs } }
 
-    (* Topification *)
-    let topify (msg: string) (t: t): t =
-      let cons =
-        match t.t_t with
-        | None -> None
-        | Some u ->
-            warn msg;
-            Some { u_lin = IntMap.empty;
-                   u_sub = IntMap.empty;
-                   u_mem = IntMap.empty;
-                   u_eqs = IntMap.empty } in
-      { t with t_t = cons }
-
-    (* Is an abstract value top (empty of constraints);
-     * this is useful to diagnose precision losses *)
-    let u_is_top (u: u): bool =
-      u.u_lin = IntMap.empty && u.u_sub = IntMap.empty
-        && u.u_mem = IntMap.empty && u.u_eqs = IntMap.empty
-    let is_top (t: t): bool =
-      match t.t_t with
-      | None -> false
-      | Some u -> u_is_top u
-
-
-    (* Checking whether an abstract value entails some constraint *)
-
-
-
-    (** Lattice elements *)
-
-    (* Pretty-printing, with indentation *)
-
 
     (** A bit of reduction, for internal use only *)
     (* Notes:
@@ -794,41 +792,6 @@ module Set_lin =
 
     (** Comparison and join operators *)
 
-    (* Comparison *)
-    exception Abort
-    (* are all constraints of u1 true in u0 ? *)
-    let u_is_le (u0: u) (u1: u): bool =
-      try
-        IntMap.iter
-          (fun i sl1 ->
-            if not (sl_eq sl1 (IntMap.find i u0.u_lin)) then raise Abort
-          ) u1.u_lin;
-        IntMap.iter
-          (fun i elts1 ->
-            if not (IntSet.subset elts1 (u_get_mem u0 i)) then raise Abort
-          ) u1.u_mem;
-        IntMap.iter
-          (fun i sub1 ->
-            if not (IntSet.subset sub1 (u_get_sub u0 i)) then raise Abort
-          ) u1.u_sub;
-        IntMap.iter
-          (fun i eqs1 ->
-            if not (IntSet.subset eqs1 (u_get_eqs u0 i)) then raise Abort
-          ) u1.u_eqs;
-        true
-      with
-      | Not_found -> false
-      | Abort -> false
-      
-    let is_le (t0: t) (t1: t): bool =
-      (* TODO: we may want to do some reduction before we run is_le *)
-      if debug_module then
-        Printf.printf "Calling set inclusion on:\n%sand:\n%s\n"
-          (t_2stri "   " t0) (t_2stri "   " t1);
-      match t0.t_t, t1.t_t with
-      | None, _ -> true
-      | Some _, None -> false
-      | Some u0, Some u1 -> u_is_le u0 u1
 
     (* Lower upper bound *)
     let u_lub (u0: u) (u1: u): u =
@@ -959,17 +922,6 @@ module Set_lin =
     let weak_bnd (t0: t) (t1: t): t = t_lub t0 t1
     (* Upper bound: serves as join and widening *)
     let upper_bnd (t0: t) (t1: t): t = t_lub t0 t1
-
-
-
-    (** Set condition test *)
-    let set_guard_aux (c: set_cons) (t: t): t =
-    let set_guard (c: set_cons) (t: t): t =
-      let gt = set_guard_aux c t in
-      if debug_module then
-        Printf.printf "Guard: %s\n%sResult:\n%s\n" (Set_utils.set_cons_2str c)
-          (t_2stri "   " t) (t_2stri "   " gt);
-      gt
 
 
     (** Forget (if the meaning of the sv changes) *)
