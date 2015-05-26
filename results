@@ -79,8 +79,8 @@ def main():
     print ""
 
     print "- T: Timeout"
-    print "- P: Pass -- No warnings"
-    print "- F: Fail -- Warnings raised"
+    print "- P: Pass: No warnings"
+    print "- F: Fail: Warnings raised"
 
     print ""
 
