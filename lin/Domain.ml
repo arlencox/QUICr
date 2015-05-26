@@ -21,6 +21,7 @@
  *  - now type t has a single field; remove struct
  *  - add Format printers in the maps
  *  - move stuffs specific to set_lin in a separate module
+ *  - do reduction on a SET of symbols about to be removed, and not just one
  *)
 
 (** Maps and Sets with printers *)
@@ -119,6 +120,12 @@ type u =
 
 (* The type of abstract elements (bottom or non bottom) *)
 type t = u option (* None if _|_, Some u if non bot constraints u *)
+
+(* A straightforward lift operation *)
+let lift (f: u -> u) (x: t): t =
+  match x with
+  | None -> x
+  | Some u -> Some (f u)
 
 
 (** Abstract domain interface types, and "initialization" *)
@@ -300,57 +307,55 @@ let u_add_lin (u: u) (i: int) (sl: set_lin): u = (* i = sl *)
   { u with u_lin = IntMap.add i sl u.u_lin }
 
 (* Guard operator, adds a new constraint *)
-let constrain (c: cnstr) (x: t): t =
-  match x with
-  | None -> x
-  | Some u ->
-      let u =
-        (* Basic constraints added using the utility functions:
-         *  all constraints needed in the graph examples are supported,
-         *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
-         *  constraints should just not arise here! *)
-        match c with
-        | L.In (i, L.Var j) ->
-            u_add_mem u i j
-        | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
-            if IntMap.mem i u.u_lin then
-              Printf.printf "WARN,constrain: existing linear constraint";
-            let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
-            { u with u_lin = IntMap.add i cons u.u_lin }
-        | L.Eq (L.Var i, L.Var j) ->
-            u_add_eq u i j
-        | L.Eq (L.Var i, L.DisjUnion (L.Var j, L.Var k))
-        | L.Eq (L.DisjUnion (L.Var j, L.Var k), L.Var i) ->
-            u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
-                            sl_elts = IntSet.empty }
-        | L.Eq (L.Var i, L.Sing j) | L.Eq (L.Sing j, L.Var i)
-        | L.Eq (L.Var i, L.DisjUnion (L.Empty, L.Sing j))
-        | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Empty)) ->
-            u_add_lin u i { sl_sets = IntSet.empty;
-                            sl_elts = IntSet.singleton j }
-        | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
-            u_add_lin u i { sl_sets = IntSet.singleton k;
-                            sl_elts = IntSet.singleton j }
-        | L.Eq (L.Var i, e) ->
-            begin
-              match linearize e with
-              | Some lin -> u_add_lin u i lin
-              | None ->
-                  Printf.printf "WARN,constrain: linearization failed";
-                  u
-            end
-        | L.SubEq (L.Var i, L.Var j) ->
-            (* TODO: there seem to be a bug in the inclusion order,
-             *   that is, constraints seem to appear in the reverse
-             *   order than they should *)
-            (*if debug_module then
-              Printf.printf "inclusion: %d <= %d\n" i j;*)
-            u_add_inclusion u i j
-        | _ ->
-            (* otherwise, we just drop the constraint *)
-            Format.eprintf "WARN,constrain,ignored: %a" (L.pp pp_sym) c;
-            u in
-      Some u
+let constrain (c: cnstr): t -> t =
+  let u_constrain (u: u): u =
+    (* Basic constraints added using the utility functions:
+     *  all constraints needed in the graph examples are supported,
+     *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
+     *  constraints should just not arise here! *)
+    match c with
+    | L.In (i, L.Var j) ->
+        u_add_mem u i j
+    | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
+        if IntMap.mem i u.u_lin then
+          Printf.printf "WARN,constrain: existing linear constraint";
+        let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
+        { u with u_lin = IntMap.add i cons u.u_lin }
+    | L.Eq (L.Var i, L.Var j) ->
+        u_add_eq u i j
+    | L.Eq (L.Var i, L.DisjUnion (L.Var j, L.Var k))
+    | L.Eq (L.DisjUnion (L.Var j, L.Var k), L.Var i) ->
+        u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
+                        sl_elts = IntSet.empty }
+    | L.Eq (L.Var i, L.Sing j) | L.Eq (L.Sing j, L.Var i)
+    | L.Eq (L.Var i, L.DisjUnion (L.Empty, L.Sing j))
+    | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Empty)) ->
+        u_add_lin u i { sl_sets = IntSet.empty;
+                        sl_elts = IntSet.singleton j }
+    | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
+        u_add_lin u i { sl_sets = IntSet.singleton k;
+                        sl_elts = IntSet.singleton j }
+    | L.Eq (L.Var i, e) ->
+        begin
+          match linearize e with
+          | Some lin -> u_add_lin u i lin
+          | None ->
+              Printf.printf "WARN,constrain: linearization failed";
+              u
+        end
+    | L.SubEq (L.Var i, L.Var j) ->
+        (* TODO: there seem to be a bug in the inclusion order,
+         *   that is, constraints seem to appear in the reverse
+         *   order than they should *)
+        (*if debug_module then
+          Printf.printf "inclusion: %d <= %d\n" i j;*)
+        u_add_inclusion u i j
+    | _ ->
+        (* otherwise, we just drop the constraint *)
+        Format.eprintf "WARN,constrain,ignored: %a" (L.pp pp_sym) c;
+        u in
+  lift u_constrain
+
 
 (* Helper functions to check basic constraints *)
 exception Stop of bool
@@ -472,6 +477,104 @@ let sat (x: t) (c: cnstr): bool =
 let serialize (x: t): output =
   Printf.printf "WARN: serialize will return default, imprecise result\n";
   L.True
+
+
+(** Reduction *)
+
+(* The functions below try to rewrite constraints about a symbol about to
+ * be projected out, so as to preserved as much information as possible.
+ * However, they were written for MemCAD where symbols are projected out
+ * one by one, and a more efficient way would make these functions take
+ * a set of symbols about to be removed. *)
+
+(* Selection of the most general set_lin: (1) fewer elts, (2) fewer sets *)
+let sl_more_gen (sl0: set_lin) (sl1: set_lin): set_lin =
+  let default ( ) = sl1 (* a default, possibly unfortunate choice *) in
+  let ce0 = IntSet.cardinal sl0.sl_elts
+  and ce1 = IntSet.cardinal sl1.sl_elts in
+  if ce0 < ce1 then sl0
+  else if ce0 > ce1 then sl1
+  else
+    let cs0 = IntSet.cardinal sl0.sl_sets
+    and cs1 = IntSet.cardinal sl1.sl_sets in
+    if cs0 < cs1 then sl0
+    else if cs0 > 0 then
+      let m0 = IntSet.max_elt sl0.sl_sets
+      and m1 = IntSet.max_elt sl1.sl_sets in
+      if m0 > m1 then sl0
+      else if m0 < m1 then sl1
+      else default ( )
+    else default ( )
+
+(* Reduction of the linear part (replace a variable by lin expr if any) *)
+let t_reduce_lin (setv: int): t -> t =
+  let u_aux (u: u): u =
+    if IntMap.mem setv u.u_lin then
+      let lin0 = IntMap.find setv u.u_lin in
+      let nlins =
+        IntMap.fold
+          (fun i lin acc ->
+            if IntSet.mem setv lin.sl_sets then (* do the reduction *)
+              let lin =
+                sl_add lin0
+                  { lin with sl_sets = IntSet.remove setv lin.sl_sets } in
+              IntMap.add i lin acc
+            else (* nothing changes *) acc
+          ) u.u_lin u.u_lin in
+      { u with u_lin = nlins }
+    else u in
+  lift u_aux
+
+(* Replacing a setv by an equal setv if there is one *)
+let t_reduce_eq (setv: int): t -> t =
+  let u_aux (u: u): u =
+    if IntMap.mem setv u.u_eqs then
+      let others = IntSet.remove setv (IntMap.find setv u.u_eqs) in
+      if IntSet.cardinal others > 0 then
+        let setv0 = IntSet.min_elt others in
+        (* replace setv by setv0 everywhere if possible *)
+        let nlins =
+          IntMap.fold
+            (fun i l acc ->
+              if IntSet.mem setv l.sl_sets then
+                let s = IntSet.add setv0 (IntSet.remove setv l.sl_sets) in
+                let nl = { l with sl_sets = s } in
+                IntMap.add i nl acc
+              else acc
+            ) u.u_lin u.u_lin in
+        let nsubs =
+          IntMap.fold
+            (fun i s acc ->
+              if i = setv then
+                let s = IntSet.union s (u_get_sub u setv0) in
+                IntMap.add setv s acc
+              else if IntSet.mem setv s then
+                let s = IntSet.add setv0 (IntSet.remove setv s) in
+                IntMap.add setv s acc
+              else acc
+            ) u.u_sub u.u_sub in
+        let nmems =
+          if IntMap.mem setv u.u_mem then
+            let s = IntMap.find setv u.u_mem in
+            let s0 = u_get_mem u setv0 in
+            IntMap.add setv0 (IntSet.union s s0) u.u_mem
+          else u.u_mem in
+        let nlins =
+          if IntMap.mem setv nlins then
+            if IntMap.mem setv0 nlins then
+              let sl0 = IntMap.find setv0 nlins
+              and sl  = IntMap.find setv  nlins in
+              Printf.printf "WARN, reduce: choice between two set_lin eqs";
+              IntMap.add setv0 (sl_more_gen sl sl0) nlins
+            else IntMap.add setv0 (IntMap.find setv nlins) nlins
+          else nlins in
+        { u with
+          u_lin = nlins;
+          u_sub = nsubs;
+          u_mem = nmems; }
+      else u
+    else u in
+  lift u_aux
 
 
 (** Manipulating symbols *)
@@ -729,121 +832,6 @@ let combine (q: query) (x: t) =
 
 module Set_lin =
   (struct
-    (** Some basic functions over set_lin *)
-    (* Just a setv *)
-    let sl_setv (setv: int): set_lin =
-      { sl_elts = IntSet.empty;
-        sl_sets = IntSet.singleton setv }
-    (* Selection of the most general set_lin: (1) fewer elts, (2) fewer sets *)
-    let sl_more_gen (sl0: set_lin) (sl1: set_lin): set_lin =
-      let default ( ) = warn "bad case"; sl1 in
-      let ce0 = IntSet.cardinal sl0.sl_elts
-      and ce1 = IntSet.cardinal sl1.sl_elts in
-      if ce0 < ce1 then sl0
-      else if ce0 > ce1 then sl1
-      else
-        let cs0 = IntSet.cardinal sl0.sl_sets
-        and cs1 = IntSet.cardinal sl1.sl_sets in
-        if cs0 < cs1 then sl0
-        else if cs0 > 0 then
-          let m0 = IntSet.max_elt sl0.sl_sets
-          and m1 = IntSet.max_elt sl1.sl_sets in
-          if m0 > m1 then sl0
-          else if m0 < m1 then sl1
-          else default ( )
-        else default ( )
-
-
-    (** General utility functions *)
-
-    (* map over the option type *)
-    let t_map (f: u -> u) (t: t): t =
-      match t.t_t with
-      | None -> t
-      | Some u -> { t with t_t = Some (f u) }
-
-    (* Empty element *)
-    let empty (uo: u option): t = (* corresponds to top in fact *)
-      { t_t     = uo;
-        t_roots = IntSet.empty; }
-
-
-
-    (** A bit of reduction, for internal use only *)
-    (* Notes:
-     *  - we would need less reduction with an equality functor
-     *  - we could share code with iterators
-     *)
-    (* Reduction of the linear part (replace a variable by lin expr if any) *)
-    let t_reduce_lin (setv: int) (t: t): t =
-      let u_aux (u: u): u =
-        if IntMap.mem setv u.u_lin then
-          let lin0 = IntMap.find setv u.u_lin in
-          let nlins =
-            IntMap.fold
-              (fun i lin acc ->
-                if IntSet.mem setv lin.sl_sets then (* do the reduction *)
-                  let lin =
-                    sl_add lin0
-                      { lin with sl_sets = IntSet.remove setv lin.sl_sets } in
-                  IntMap.add i lin acc
-                else (* nothing changes *) acc
-              ) u.u_lin u.u_lin in
-          { u with u_lin = nlins }
-        else u in
-      t_map u_aux t
-    (* Replacing a setv by an equal setv if there is one *)
-    let t_reduce_eq (setv: int) (t: t): t =
-      let u_aux (u: u): u =
-        if IntMap.mem setv u.u_eqs then
-          let others = IntSet.remove setv (IntMap.find setv u.u_eqs) in
-          if IntSet.cardinal others > 0 then
-            let setv0 = IntSet.min_elt others in
-            (* replace setv by setv0 everywhere if possible *)
-            let nlins =
-              IntMap.fold
-                (fun i l acc ->
-                  if IntSet.mem setv l.sl_sets then
-                    let s = IntSet.add setv0 (IntSet.remove setv l.sl_sets) in
-                    let nl = { l with sl_sets = s } in
-                    IntMap.add i nl acc
-                  else acc
-                ) u.u_lin u.u_lin in
-            let nsubs =
-              IntMap.fold
-                (fun i s acc ->
-                  if i = setv then
-                    let s = IntSet.union s (u_get_sub u setv0) in
-                    IntMap.add setv s acc
-                  else if IntSet.mem setv s then
-                    let s = IntSet.add setv0 (IntSet.remove setv s) in
-                    IntMap.add setv s acc
-                  else acc
-                ) u.u_sub u.u_sub in
-            let nmems =
-              if IntMap.mem setv u.u_mem then
-                let s = IntMap.find setv u.u_mem in
-                let s0 = u_get_mem u setv0 in
-                IntMap.add setv0 (IntSet.union s s0) u.u_mem
-              else u.u_mem in
-            let nlins =
-              if IntMap.mem setv nlins then
-                if IntMap.mem setv0 nlins then
-                  let sl0 = IntMap.find setv0 nlins
-                  and sl  = IntMap.find setv  nlins in
-                  warn "choice between two set_lin equalities";
-                  IntMap.add setv0 (sl_more_gen sl sl0) nlins
-                else IntMap.add setv0 (IntMap.find setv nlins) nlins
-              else nlins in
-            { u with
-              u_lin = nlins;
-              u_sub = nsubs;
-              u_mem = nmems; }
-          else u
-        else u in
-      t_map u_aux t
-
-
     (** Renaming (e.g., post join) *)
     (* Xavier:
      *  In all other domains, this function takes a single abstract element,
