@@ -33,11 +33,12 @@ let counter = ref 0
 
 
 let is_valid h f =
-  Format.printf "Checking %a@." (F.pp_formula Format.pp_print_int) f;
+  (*Format.printf "Checking %a@." (F.pp_formula Format.pp_print_int) f;*)
+  (*Format.printf "Checking %a@." F.pp_smtlib (F.mnot h f);*)
   let cnf = F.prenexcnf h (F.mnot h f) in
   let fname = Printf.sprintf "/tmp/depqbf_%d_%d.cnf" (Unix.getpid ()) !counter in
   incr counter;
-  Format.printf "Running %s@." fname;
+  (*Format.printf "Running %s@." fname;*)
   let fout = open_out fname in
   F.pp_qdimacs fout cnf;
   close_out fout;

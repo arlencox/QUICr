@@ -112,129 +112,60 @@ type quantifier =
 
 let pexists v = function
   | (Existential, l)::rest ->
-    (Existential, (v::l))::rest
+    (Existential, ISet.add v l)::rest
   | rest ->
-    (Existential, [v])::rest
+    (Existential, ISet.singleton v)::rest
 
 let pforall v = function
   | (Universal, l)::rest ->
-    (Universal, (v::l))::rest
+    (Universal, ISet.add v l)::rest
   | rest ->
-    (Universal, [v])::rest
+    (Universal, ISet.singleton v)::rest
 
-let rec qtlinearize is_neg = function
-  | QTLeaf -> []
+let rec qappend l1 l2 =
+  match l1 with
+  | [Universal, ul1] ->
+    begin match l2 with
+      | (Universal, ul2)::rest ->
+        (Universal, (ISet.union ul1 ul2))::rest
+      | rest -> (Universal, ul1)::rest
+    end
+  | [Existential, el1] ->
+    begin match l2 with
+      | (Existential, el2)::rest ->
+        (Existential, (ISet.union el1 el2))::rest
+      | rest -> (Existential, el1)::rest
+    end
+  | [] ->
+    l2
+  | h::rest ->
+    h::(qappend rest l2)
+
+let rec qtlinearize qs vs is_neg = function
+  | QTLeaf -> (qs,vs)
   | QTUniversal (v, rest) ->
-    (if is_neg then
-      pexists
+    let (qs, vs) = qtlinearize qs vs is_neg rest in
+    if ISet.mem v vs then
+      (qs, vs)
     else
-      pforall)
-      v (qtlinearize is_neg rest)
+      let qs' = (if is_neg then pexists else pforall) v qs in
+      (qs', ISet.add v vs)
   | QTExistential (v, rest) ->
-    (if is_neg then
-      pforall
+    let (qs, vs) = qtlinearize qs vs is_neg rest in
+    if ISet.mem v vs then
+      (qs, vs)
     else
-      pexists)
-      v (qtlinearize is_neg rest)
+      let qs' = (if is_neg then pforall else pexists) v qs in
+      (qs', ISet.add v vs)
   | QTBranch (r1, r2) ->
-    (qtlinearize is_neg r1) @ (qtlinearize is_neg r2)
+    let (qs,vs) = qtlinearize qs vs is_neg r2 in
+    qtlinearize qs vs is_neg r1
   | QTNot rest ->
-    qtlinearize (not is_neg) rest
+    qtlinearize qs vs (not is_neg) rest
 
 let qtlinearize qt =
-  qtlinearize false qt
+  fst (qtlinearize [] ISet.empty false qt)
 
-(* v = a /\ b
-   a /\ b -> v ---  ~a ~b v
-   v -> a      ---  ~v a
-   v -> b      ---  ~v b
-*)
-let tseitin_and v a b cl =
-  [-a; -b; v]::
-  [-v; a]::
-  [-v; b]::
-  cl
-
-(* v = a \/ b <-> ~v = ~a /\ ~b *)
-let tseitin_or v a b cl =
-  tseitin_and (-v) (-a) (-b) cl
-
-(* v = false
-   v -> false
-   ~v *)
-let tseitin_false v cl =
-  [-v]::cl
-
-(* v = true
-   true -> v
-   v *)
-let tseitin_true v cl =
-  [v]::cl
-
-
-
-let prenexcnf h e =
-  let vfalse = 1 in
-  let vtrue = 2 in
-  let frontier = 3 in
-  let clauses = [[-1];[2]] in
-  let visited = Hashtbl.create 8191 in
-  let rec prenex state (e:c) =
-    try
-      Hashtbl.find visited e.H.tag
-    with Not_found ->
-      let quant op x a =
-        let {var_map;frontier} = state in
-        let xmap = try Some (IMap.find x var_map) with Not_found -> None in
-        let boundx = frontier in
-        let var_map = IMap.add x boundx var_map in
-        let frontier = frontier + 1 in
-        let ({var_map;frontier;_} as state,a,qs) = prenex {state with var_map;frontier} a in
-        let var_map = match xmap with 
-          | Some xmap -> IMap.add x xmap var_map
-          | None -> IMap.remove x var_map
-        in
-        ({state with var_map;frontier}, a, op boundx qs )
-      in
-      let bin op a b =
-        let (state,a,qs1) = prenex state a in
-        let (state,b,qs2) = prenex state b in
-        let freshv = state.frontier in
-        let frontier = freshv + 1 in
-        let clauses = op freshv a b state.clauses in
-        let state = {state with frontier; clauses} in
-        (state, freshv, qtbranch qs1 qs2)
-      in
-
-      let result = match e.H.node with
-        | Exists (x,a) -> quant qtexists x a
-        | ForAll (x,a) -> quant qtforall x a
-        | Var x ->
-          begin try 
-              let x = IMap.find x state.var_map in
-              (state, x, qtleaf)
-            with Not_found ->
-              let x' = state.frontier in
-              let state = {
-                state with
-                var_map = IMap.add x x' state.var_map;
-                frontier = state.frontier + 1;
-              } in
-              (state, x', qtleaf)
-          end
-        | And (a,b) -> bin tseitin_and a b
-        | Or (a,b) -> bin tseitin_or a b
-        | Not a ->
-          let (state,a,qs) = prenex state a in
-          (state, -a, qtnot qs)
-        | True -> (state, vtrue, qtleaf)
-        | False -> (state, vfalse, qtleaf)
-      in
-      Hashtbl.replace visited e.H.tag result;
-      result
-  in
-  let (state,e,qt) = prenex {var_map = IMap.empty; frontier; clauses} e in
-  (state.var_map,[e]::state.clauses,state.frontier, qtlinearize qt)
 
 let pp_qdimacs ff (var_map, clauses, frontier, qs) =
   Printf.fprintf ff "p cnf %d %d\n" (frontier-1) (List.length clauses);
@@ -245,7 +176,7 @@ let pp_qdimacs ff (var_map, clauses, frontier, qs) =
       | Existential ->
         output_string ff "e "
       end;
-      List.iter (fun l ->
+      ISet.iter (fun l ->
           output_string ff (string_of_int l);
           output_char ff ' '
         ) vs;
@@ -259,6 +190,9 @@ let pp_qdimacs ff (var_map, clauses, frontier, qs) =
       output_string ff "0\n"
     ) clauses;
     flush ff
+
+
+
 
 let rec pp_formula pp_var ff f =
   match f.H.node with
@@ -281,6 +215,7 @@ type 'a v = {
   mnot: ('a -> 'a);
   mexists: (int -> 'a -> 'a);
   mforall: (int -> 'a -> 'a);
+  entry: (c -> unit);
 }
 
 let rec visit visited v (e: c) =
@@ -288,6 +223,7 @@ let rec visit visited v (e: c) =
     Hashtbl.find visited e.H.tag
   with Not_found ->
     let vrec = visit visited v in
+    v.entry e;
     let result = match e.H.node with
       | True -> v.mtrue
       | False -> v.mfalse
@@ -313,7 +249,6 @@ let rec visit visited v (e: c) =
     Hashtbl.replace visited e.H.tag result;
     result
 
-
 let symbols e =
   visit (Hashtbl.create 8191) {
     mtrue = ISet.empty;
@@ -324,5 +259,119 @@ let symbols e =
     mnot = (fun a -> a);
     mexists = (fun v a -> ISet.remove v a);
     mforall = (fun v a -> ISet.remove v a);
+    entry = (fun _ -> ());
   } e
 
+let pp_smtlib ff f =
+  let s = visit (Hashtbl.create 8191) {
+    mtrue = "true";
+    mfalse = "false";
+    mvar = (fun v -> "v"^(string_of_int v));
+    mand = (fun a b -> String.concat " " ["(and"; a; b; ")"]);
+    mor = (fun a b -> String.concat " " ["(or"; a; b; ")"]);
+    mnot = (fun a -> String.concat " " ["(not"; a; ")"]);
+    mexists = (fun v a ->
+        let v = "v"^(string_of_int v) in
+        let v = "(("^v^" Bool))" in
+        String.concat " " ["(exists"; v; a; ")"]);
+    mforall = (fun v a ->
+        let v = "v"^(string_of_int v) in
+        let v = "(("^v^" Bool))" in
+        String.concat " " ["(forall"; v; a; ")"]);
+    entry = (fun _ -> ());
+    } f in
+  Format.fprintf ff "%s" s
+
+
+let pp_smtlib ff f =
+  let sym ff i =
+    Format.fprintf ff "v%d" i
+  in
+  ISet.iter (fun s ->
+      Format.fprintf ff "(declare-fun %a () Bool)\n" sym s
+    ) (symbols f);
+  Format.fprintf ff "(assert ";
+  pp_smtlib ff f;
+  Format.fprintf ff ")"
+
+let prenexcnf h e =
+  let clauses = ref [] in
+  let emit cl =
+    clauses := cl :: !clauses
+  in
+  let frontier = ref 3 in
+  let vtrue = 1 in
+  let vfalse = 2 in
+  let vnot v = -v in
+  emit [vtrue];
+  emit [vnot vfalse];
+  let vmap = Hashtbl.create 8181 in
+
+  let get_var v =
+    try
+      Hashtbl.find vmap v
+    with Not_found ->
+      let vid = !frontier in
+      incr frontier;
+      Hashtbl.replace vmap v vid;
+      vid
+  in
+
+  let fresh () =
+    let vid = !frontier in
+    incr frontier;
+    vid
+  in
+
+  let v = {
+    mtrue = (vtrue, qtleaf);
+    mfalse = (vfalse, qtleaf);
+    mvar = (fun v -> (get_var v, qtleaf));
+    mand = (fun (a,qa) (b,qb) ->
+        let v = fresh () in
+        (* v = a /\ b
+           a /\ b -> v ---  ~a ~b v
+           v -> a      ---  ~v a
+           v -> b      ---  ~v b
+        *)
+        emit [-a; -b; v];
+        emit [-v; a];
+        emit [-v; b];
+        (v, qtbranch qa qb));
+    mor = (fun (a,qa) (b,qb) ->
+        let v = fresh () in
+        (* v = a \/ b
+           v -> a \/ b --- ~v a b
+           a -> v      --- ~a v
+           b -> v      --- ~b v
+        *)
+        emit [a; b; -v];
+        emit [v; -a];
+        emit [v; -b];
+        (v, qtbranch qa qb));
+    mnot = (fun (a,qa) -> (-a, qtnot qa));
+
+    mexists = (fun v (a,qa) ->
+        let vid = Hashtbl.find vmap v in
+        Hashtbl.remove vmap v;
+        (a, qtexists vid qa)
+      );
+    mforall = (fun v (a,qa) ->
+        let vid = Hashtbl.find vmap v in
+        Hashtbl.remove vmap v;
+        (a, qtforall vid qa)
+      );
+    entry = (fun e ->
+        match e.H.node with
+        | Exists (v, _)
+        | ForAll (v, _) ->
+          let vid = !frontier in
+          incr frontier;
+          Hashtbl.add vmap v vid
+        | _ -> ()
+      );
+  } in
+  let (id,qt) = visit (Hashtbl.create 8191) v e in
+  emit [id];
+  (vmap, !clauses, !frontier, qtlinearize qt)
+  
