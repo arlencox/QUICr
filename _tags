@@ -2,6 +2,7 @@
 <cnf/*>: for-pack(CNF)
 <eq/*>: for-pack(Eq)
 <logger/*>: for-pack(Logger)
+<lin/*>: for-pack(Lin)
 <packer/*>: for-pack(Packer)
 <stats/*>: for-pack(Stats)
 <union-find/*>: for-pack(UnionFind)
