@@ -22,6 +22,13 @@
  *  - add Format printers in the maps
  *  - move stuffs specific to set_lin in a separate module
  *  - do reduction on a SET of symbols about to be removed, and not just one
+ * 
+ * The functions below still have a very rudimentary implementation, that
+ * should be improved:
+ *  - meet
+ *  - serialize
+ *  - query
+ *  - combine
  *)
 
 (** Maps and Sets with printers *)
@@ -644,19 +651,20 @@ let u_drop_syms (fv: int -> bool) (u: u): u =
     u_eqs = eqs }
 
 (* Removal of all the constraints on a set of symbols *)
-let forget (l: sym list): t -> t = function
-  | None -> None
-  | Some u ->
-      let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
-      (* do some reduction *)
-      let u = u_reduce svset u in
-      (* perform the removal *)
-      Some (u_drop_syms (fun i -> IntSet.mem i svset) u)
+let forget (l: sym list): t -> t =
+  let u_forget (u: u): u =
+    let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
+    (* do some reduction *)
+    let u = u_reduce svset u in
+    (* perform the removal *)
+    u_drop_syms (fun i -> IntSet.mem i svset) u in
+  lift u_forget
 
 (* Renaming *)
-let rename_symbols (r: sym Rename.t): t -> t = function
-  | None -> None
-  | Some u -> failwith "rename_symbols"
+let rename_symbols (r: sym Rename.t): t -> t =
+  let u_rename (u: u): u =
+    failwith "rename_symbols" in
+  lift u_rename
 
 
 (** Lattice binary operations *)
