@@ -507,74 +507,74 @@ let sl_more_gen (sl0: set_lin) (sl1: set_lin): set_lin =
     else default ( )
 
 (* Reduction of the linear part (replace a variable by lin expr if any) *)
-let t_reduce_lin (setv: int): t -> t =
-  let u_aux (u: u): u =
-    if IntMap.mem setv u.u_lin then
-      let lin0 = IntMap.find setv u.u_lin in
-      let nlins =
-        IntMap.fold
-          (fun i lin acc ->
-            if IntSet.mem setv lin.sl_sets then (* do the reduction *)
-              let lin =
-                sl_add lin0
-                  { lin with sl_sets = IntSet.remove setv lin.sl_sets } in
-              IntMap.add i lin acc
-            else (* nothing changes *) acc
-          ) u.u_lin u.u_lin in
-      { u with u_lin = nlins }
-    else u in
-  lift u_aux
+let u_reduce_lin (setv: int) (u: u): u =
+  if IntMap.mem setv u.u_lin then
+    let lin0 = IntMap.find setv u.u_lin in
+    let nlins =
+      IntMap.fold
+        (fun i lin acc ->
+          if IntSet.mem setv lin.sl_sets then (* do the reduction *)
+            let lin =
+              sl_add lin0
+                { lin with sl_sets = IntSet.remove setv lin.sl_sets } in
+            IntMap.add i lin acc
+          else (* nothing changes *) acc
+        ) u.u_lin u.u_lin in
+    { u with u_lin = nlins }
+  else u
 
 (* Replacing a setv by an equal setv if there is one *)
-let t_reduce_eq (setv: int): t -> t =
-  let u_aux (u: u): u =
-    if IntMap.mem setv u.u_eqs then
-      let others = IntSet.remove setv (IntMap.find setv u.u_eqs) in
-      if IntSet.cardinal others > 0 then
-        let setv0 = IntSet.min_elt others in
-        (* replace setv by setv0 everywhere if possible *)
-        let nlins =
-          IntMap.fold
-            (fun i l acc ->
-              if IntSet.mem setv l.sl_sets then
-                let s = IntSet.add setv0 (IntSet.remove setv l.sl_sets) in
-                let nl = { l with sl_sets = s } in
-                IntMap.add i nl acc
-              else acc
-            ) u.u_lin u.u_lin in
-        let nsubs =
-          IntMap.fold
-            (fun i s acc ->
-              if i = setv then
-                let s = IntSet.union s (u_get_sub u setv0) in
-                IntMap.add setv s acc
-              else if IntSet.mem setv s then
-                let s = IntSet.add setv0 (IntSet.remove setv s) in
-                IntMap.add setv s acc
-              else acc
-            ) u.u_sub u.u_sub in
-        let nmems =
-          if IntMap.mem setv u.u_mem then
-            let s = IntMap.find setv u.u_mem in
-            let s0 = u_get_mem u setv0 in
-            IntMap.add setv0 (IntSet.union s s0) u.u_mem
-          else u.u_mem in
-        let nlins =
-          if IntMap.mem setv nlins then
-            if IntMap.mem setv0 nlins then
-              let sl0 = IntMap.find setv0 nlins
-              and sl  = IntMap.find setv  nlins in
-              Printf.printf "WARN, reduce: choice between two set_lin eqs";
-              IntMap.add setv0 (sl_more_gen sl sl0) nlins
-            else IntMap.add setv0 (IntMap.find setv nlins) nlins
-          else nlins in
-        { u with
-          u_lin = nlins;
-          u_sub = nsubs;
-          u_mem = nmems; }
-      else u
-    else u in
-  lift u_aux
+let u_reduce_eq (setv: int) (u: u): u =
+  if IntMap.mem setv u.u_eqs then
+    let others = IntSet.remove setv (IntMap.find setv u.u_eqs) in
+    if IntSet.cardinal others > 0 then
+      let setv0 = IntSet.min_elt others in
+      (* replace setv by setv0 everywhere if possible *)
+      let nlins =
+        IntMap.fold
+          (fun i l acc ->
+            if IntSet.mem setv l.sl_sets then
+              let s = IntSet.add setv0 (IntSet.remove setv l.sl_sets) in
+              let nl = { l with sl_sets = s } in
+              IntMap.add i nl acc
+            else acc
+          ) u.u_lin u.u_lin in
+      let nsubs =
+        IntMap.fold
+          (fun i s acc ->
+            if i = setv then
+              let s = IntSet.union s (u_get_sub u setv0) in
+              IntMap.add setv s acc
+            else if IntSet.mem setv s then
+              let s = IntSet.add setv0 (IntSet.remove setv s) in
+              IntMap.add setv s acc
+            else acc
+          ) u.u_sub u.u_sub in
+      let nmems =
+        if IntMap.mem setv u.u_mem then
+          let s = IntMap.find setv u.u_mem in
+          let s0 = u_get_mem u setv0 in
+          IntMap.add setv0 (IntSet.union s s0) u.u_mem
+        else u.u_mem in
+      let nlins =
+        if IntMap.mem setv nlins then
+          if IntMap.mem setv0 nlins then
+            let sl0 = IntMap.find setv0 nlins
+            and sl  = IntMap.find setv  nlins in
+            Printf.printf "WARN, reduce: choice between two set_lin eqs";
+            IntMap.add setv0 (sl_more_gen sl sl0) nlins
+          else IntMap.add setv0 (IntMap.find setv nlins) nlins
+        else nlins in
+      { u with
+        u_lin = nlins;
+        u_sub = nsubs;
+        u_mem = nmems; }
+    else u
+  else u
+
+(* Group reduction *)
+let u_reduce (syms: IntSet.t) (u: u): u =
+  IntSet.fold (fun i u -> u_reduce_eq i (u_reduce_lin i u)) syms u
 
 
 (** Manipulating symbols *)
@@ -582,7 +582,7 @@ let t_reduce_eq (setv: int): t -> t =
 (* Remove all constraints over a group of symbols in one shot;
  * function fv maps a sym to true if it should be dropped (as a set or
  * as an element), and to false otherwise *)
-let drop_syms (fv: int -> bool) (u: u): u =
+let u_drop_syms (fv: int -> bool) (u: u): u =
   let fset s = IntSet.exists fv s in
   let filter_set s =
     if fset s then IntSet.filter (fun i -> not (fv i)) s
@@ -648,9 +648,10 @@ let forget (l: sym list): t -> t = function
   | None -> None
   | Some u ->
       let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
-      let f i = IntSet.mem i svset in
-      (* TODO: merge drop_symb_svs into drop_setvs *)
-      Some (drop_syms f u)
+      (* do some reduction *)
+      let u = u_reduce svset u in
+      (* perform the removal *)
+      Some (u_drop_syms (fun i -> IntSet.mem i svset) u)
 
 (* Renaming *)
 let rename_symbols (r: sym Rename.t): t -> t = function
@@ -833,15 +834,6 @@ let combine (q: query) (x: t) =
 module Set_lin =
   (struct
     (** Renaming (e.g., post join) *)
-    (* Xavier:
-     *  In all other domains, this function takes a single abstract element,
-     *  that has not been renamed yet, and fully renames variables in it
-     *  (doing some duplications if that is required).
-     *  It is usually called once after a shape join, and before a "numeric"
-     *  join. I could not understand the way it is called in dom_mem_low_list.
-     *  The implementation below renames t1, and basically ignores t2 (after
-     *  issuing a warning if t2 contains any constraint, i.e., is not top).
-     *)
     (* TODO: share code ! *)
     let symvars_srename_setv_mapping (* for is_le *)
         (om: (Offs.t * int) Offs.OffMap.t)
