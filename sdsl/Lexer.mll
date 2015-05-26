@@ -18,6 +18,11 @@ rule token = parse
   | "(" { LPAREN }
   | ")" { RPAREN }
   | ";" { SEMI }
+  | "branch" { BRANCH }
+  | "both" { BOTH }
+  | "and" { AND }
+  | "loop" { LOOP }
+  | "rename" { RENAME }
   | "if" { IF }
   | "while" { WHILE }
   | "kill" { KILL }

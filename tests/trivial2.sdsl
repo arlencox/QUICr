@@ -1,0 +1,4 @@
+b = c;
+a = b;
+b = d;
+assert(a = c);

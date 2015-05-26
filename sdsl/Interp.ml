@@ -124,6 +124,12 @@ module Make(D: Interface.Domain
     let fresh sym =
       let id = !count in
       incr count;
+      begin try
+        let oid = Hashtbl.find env sym in
+        Hashtbl.remove renv oid
+      with Not_found ->
+        ()
+      end;
       Hashtbl.replace env sym id;
       Hashtbl.replace renv id sym;
       id
@@ -146,6 +152,13 @@ module Make(D: Interface.Domain
         let state = D.forget [v] state in
         if !print_step then print_state renv state;
         state
+      | Rename (v1, v2) ->
+        if !print_step then Format.printf "@,rename %s %s" v1 v2;
+        let v1 = get_or_fresh v1 in
+        let v2 = get_or_fresh v2 in
+        let state = D.rename_symbols (Rename.singleton v1 v2) state in
+        if !print_step then print_state renv state;
+        state
       | Seq (t1, t2) -> interpret (interpret state t1) t2
       | Branch (t1, t2) ->
         if !print_step then Format.printf "@,@[<v 2>branch {";
@@ -155,6 +168,16 @@ module Make(D: Interface.Domain
         let s2 = interpret state t2 in
         if !print_step then Format.printf "@]@,}";
         let state = D.join s1 s2 in
+        if !print_step then print_state renv state;
+        state
+      | Both (t1, t2) ->
+        if !print_step then Format.printf "@,@[<v 2>both {";
+        let s1 = interpret state t1 in
+
+        if !print_step then Format.printf "@]@,@[<v 2>} and {";
+        let s2 = interpret state t2 in
+        if !print_step then Format.printf "@]@,}";
+        let state = D.meet s1 s2 in
         if !print_step then print_state renv state;
         state
       | Loop t ->

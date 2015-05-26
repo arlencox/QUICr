@@ -21,6 +21,11 @@
 %token NONDET
 %token ASSERT
 %token ASSUME
+%token BRANCH
+%token AND
+%token RENAME
+%token BOTH
+%token LOOP
 
 
 %left SEMI
@@ -65,7 +70,14 @@ statement
   : { AST.Skip }
   | IDENT EQUAL expr { AST.Assign($1,$3) }
   | KILL IDENT { AST.Kill $2 }
+  | RENAME IDENT IDENT { AST.Rename ($2,$3) }
   | statement SEMI statement { AST.Seq($1,$3) }
+  | BRANCH LCURLY statement RCURLY ELSE LCURLY statement RCURLY {
+      AST.Branch ($3,$7)
+    }
+  | BOTH LCURLY statement RCURLY AND LCURLY statement RCURLY {
+      AST.Both ($3,$7)
+    }
   | IF LPAREN cond RPAREN LCURLY statement RCURLY {
       mkif $3 $6 AST.Skip
     }
@@ -74,6 +86,9 @@ statement
     }
   | WHILE LPAREN cond RPAREN LCURLY statement RCURLY {
       mkwhile $3 $6
+    }
+  | LOOP LCURLY statement RCURLY {
+      AST.Loop($3)
     }
   | ASSERT LPAREN cond RPAREN {
       let c = match $3 with
