@@ -661,9 +661,28 @@ let forget (l: sym list): t -> t =
   lift u_forget
 
 (* Renaming *)
+(* Nb: this function is a lot simpler than the MemCAD one, since it does not
+ *     also have to manage duplication and removal of symbols *)
 let rename_symbols (r: sym Rename.t): t -> t =
   let u_rename (u: u): u =
-    failwith "rename_symbols" in
+    let do_sym (i: int): int =
+      try Rename.get r i
+    with Not_found -> failwith "rename_symbols: do_sv fails" in
+    let do_sym_set (s: IntSet.t): IntSet.t =
+      IntSet.fold (fun i acc -> IntSet.add (do_sym i) acc) s IntSet.empty in
+    let do_sym_set_map (ms: IntSet.t IntMap.t): IntSet.t IntMap.t =
+      IntMap.fold (fun setv s -> IntMap.add (do_sym setv) (do_sym_set s))
+        ms IntMap.empty in
+    let do_set_lin (sl: set_lin): set_lin =
+      { sl_elts  =  do_sym_set sl.sl_elts;
+        sl_sets  =  do_sym_set sl.sl_sets } in
+    let lin =
+      IntMap.fold (fun setv sl -> IntMap.add (do_sym setv) (do_set_lin sl))
+        u.u_lin IntMap.empty in
+    { u_lin = lin;
+      u_mem = do_sym_set_map u.u_mem;
+      u_sub = do_sym_set_map u.u_sub;
+      u_eqs = do_sym_set_map u.u_eqs } in
   lift u_rename
 
 
@@ -835,152 +854,3 @@ let query (x: t): query =
 let combine (q: query) (x: t) =
   Printf.printf "WARN: combine will return default, imprecise result\n";
   x
-
-
-(* From now on, code being ported from MemCAD
-
-module Set_lin =
-  (struct
-    (** Renaming (e.g., post join) *)
-    (* TODO: share code ! *)
-    let symvars_srename_setv_mapping (* for is_le *)
-        (om: (Offs.t * int) Offs.OffMap.t)
-        (nm: (int * Offs.t) node_mapping)
-        (svm: setv_mapping) (t1: t): t =
-      if debug_module then
-        Printf.printf "begin:\n%s" (t_2stri "  " t1);
-      assert (om = Offs.OffMap.empty);
-      let t1 =
-        drop_symb_svs (fun i -> IntSet.mem i nm.nm_rem)
-          (drop_setvs (fun i -> IntSet.mem i svm.sm_rem) t1) in
-      let do_sv (i: int): int =
-        try fst (IntMap.find i nm.nm_map)
-        with Not_found -> (*i*) error "do_sv fails" in
-      let do_sv_a (i: int): IntSet.t =
-        try let x, y = IntMap.find i nm.nm_map in IntSet.add x y
-        with Not_found -> (*IntSet.singleton i*) error "do_sv_a fails" in
-      let do_setv (i: int): int =
-        try fst (IntMap.find i svm.sm_map)
-        with Not_found ->
-          warn (Printf.sprintf "do_setv fails: %d" i);
-          i in
-      let do_sv_set (s: IntSet.t): IntSet.t =
-        IntSet.fold (fun i acc -> IntSet.add (do_sv i) acc) s IntSet.empty in
-      let do_sv_set_a (s: IntSet.t): IntSet.t =
-        IntSet.fold
-          (fun i acc -> IntSet.union (do_sv_a i) acc) s IntSet.empty in
-      let do_setv_set (s: IntSet.t): IntSet.t =
-        IntSet.fold (fun i acc -> IntSet.add (do_setv i) acc) s IntSet.empty in
-      let do_set_lin (sl: set_lin): set_lin =
-        { sl_elts  =  do_sv_set sl.sl_elts;
-          sl_sets  =  do_setv_set sl.sl_sets } in
-      let do_u (u: u): u =
-        let lin =
-          IntMap.fold (fun setv sl -> IntMap.add (do_setv setv) (do_set_lin sl))
-            u.u_lin IntMap.empty in
-        let sub =
-          IntMap.fold (fun setv s -> IntMap.add (do_setv setv) (do_setv_set s))
-            u.u_sub IntMap.empty in
-        let mem =
-          IntMap.fold (fun setv s -> IntMap.add (do_setv setv) (do_sv_set s))
-            u.u_mem IntMap.empty in
-        let eqs =
-          IntMap.fold (fun setv s -> IntMap.add (do_setv setv) (do_setv_set s))
-            u.u_eqs IntMap.empty in
-        let u =
-          { u_lin  = lin;
-            u_mem  = mem;
-            u_sub  = sub;
-            u_eqs  = eqs } in
-        IntMap.fold (* adding equalities from the mapping *)
-          (fun _ (setv0, s) acc ->
-            IntSet.fold (fun j acc -> u_add_eq acc setv0 j) s acc
-          ) svm.sm_map u in
-      let u =
-        match t1.t_t with
-        | None -> None
-        | Some u ->
-            if debug_module then
-              Printf.printf
-                "argument:\n%snode mapping:\n%sset mapping:\n%s"
-                (t_2stri "  " t1) (node_mapping_2str nm)
-                (setv_mapping_2str svm);
-            Some (do_u u) in
-      (* Add set equalities *)
-      let tr =
-        { t_t     = u;
-          t_roots = do_setv_set t1.t_roots; } in
-      if debug_module then
-        Printf.printf "renaming result:\n%s\n" (t_2stri "   " tr);
-      tr
-    let symvars_srename_no_setv_mapping (* for join *)
-        (om: (Offs.t * int) Offs.OffMap.t)
-        (nm: (int * Offs.t) node_mapping)
-        (t1: t): t =
-      if debug_module then
-        Printf.printf "begin:\n%s" (t_2stri "  " t1);
-      assert (om = Offs.OffMap.empty);
-      let t1 = drop_symb_svs (fun i -> IntSet.mem i nm.nm_rem) t1 in
-      let do_sv (i: int): int =
-        try fst (IntMap.find i nm.nm_map)
-        with Not_found -> (*i*) error "do_sv fails" in
-      let do_sv_a (i: int): IntSet.t =
-        try let x, y = IntMap.find i nm.nm_map in IntSet.add x y
-        with Not_found -> (*IntSet.singleton i*) error "do_sv_a fails" in
-      let do_sv_set (s: IntSet.t): IntSet.t =
-        IntSet.fold (fun i acc -> IntSet.add (do_sv i) acc) s IntSet.empty in
-      let do_sv_set_a (s: IntSet.t): IntSet.t =
-        IntSet.fold
-          (fun i acc -> IntSet.union (do_sv_a i) acc) s IntSet.empty in
-      let do_set_lin (sl: set_lin): set_lin =
-        { sl with sl_elts  =  do_sv_set sl.sl_elts } in
-      let do_u (u: u): u =
-        let lin =
-          IntMap.fold (fun setv sl -> IntMap.add setv (do_set_lin sl))
-            u.u_lin IntMap.empty in
-        let sub = u.u_sub in
-        let mem =
-          IntMap.fold (fun setv s -> IntMap.add setv (do_sv_set s))
-            u.u_mem IntMap.empty in
-        let eqs = u.u_eqs in
-        { u_lin  = lin;
-          u_mem  = mem;
-          u_sub  = sub;
-          u_eqs  = eqs } in
-      let u =
-        match t1.t_t with
-        | None -> None
-        | Some u ->
-            if debug_module then
-              Printf.printf
-                "argument:\n%snode mapping:\n%s"
-                (t_2stri "  " t1) (node_mapping_2str nm);
-            Some (do_u u) in
-      (* Add set equalities *)
-      let tr =
-        { t_t     = u;
-          t_roots = t1.t_roots; } in
-      if debug_module then
-        Printf.printf "renaming result:\n%s\n" (t_2stri "   " tr);
-      tr
-    let symvars_srename
-        (om: (Offs.t * int) Offs.OffMap.t)
-        (nm: (int * Offs.t) node_mapping)
-        (svm: setv_mapping option) (t1: t): t =
-      match svm with
-      | None -> symvars_srename_no_setv_mapping om nm t1
-      | Some svm -> symvars_srename_setv_mapping om nm svm t1
-
-    (* Synchronization of the SV environment*)
-    let sve_sync_top_down (sve: svenv_mod) (t: t): t =
-      (* do nothing for add; remove constraints over mod and rem *)
-      let f i = PSet.mem i sve.svm_rem || PSet.mem i sve.svm_mod in
-      drop_symb_svs f t
-
-    (* Removes all symbolic vars that are not in a given set *)
-    let symvars_filter (skeep: IntSet.t) (setvkeep: IntSet.t) (t: t): t =
-      (* Removals are done by the generic removal functions *)
-      drop_symb_svs (fun i -> not (IntSet.mem i skeep))
-        (drop_setvs (fun i -> not (IntSet.mem i setvkeep)) t)
-  end: DOMSET)
-*)
