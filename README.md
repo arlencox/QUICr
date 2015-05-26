@@ -286,3 +286,38 @@ Modify the `Main.ml` file to add the following line to the `domains` list:
 
 Note that there is a blank space before the description.  The first word in the
 description documents the argument for the domain (if there is one).
+
+## Running the DSL tool
+
+The DSL tool can be run using the `Main.native` or `Main.d.byte` commands
+followed by appropriate arguments.  For example the following command analyzes
+the code in tests/for-in-update.sdsl using a BDD-based set domain with support for
+syntactic singletons:
+
+```
+$ ./Main.native -bdd-full -sing tests/for-in-update.sdsl
+```
+
+To get output after each step of the analysis, the `-step` option can be used
+and to get the abstract state at the end of the program, the `-final` option
+can be used.
+
+To time the analysis (ignoring the frontend time), use the `-time` option.
+
+### Benchmarking set domains
+
+The benchmarks for the domains are shown [here](blob/master/BENCHMARKS.md).
+This table is generated from the `results` python script by running `make
+benchmark`.  This runs every test contained in `tests/*.sdsl` using each
+configuration given in `configurations`.
+
+The `configurations` file contains a list of options for the `Main.native`
+tool.  Each line is a unique configuration.  Lines that have # in the first
+column are comments.
+
+The `results` script depends on two python libraries:
+
+```
+pip install pexpect tabulate
+```
+
