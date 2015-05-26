@@ -476,42 +476,26 @@ let serialize (x: t): output =
 
 (** Manipulating symbols *)
 
-(* Auxilliary functions for symbols removal *)
-
-(* Remove all constraints over a group of svs in one shot;
-* function f maps a symbolic variable to true if it should be dropped,
- * and to false otherwise. *)
-let drop_symb_svs (f: int -> bool) (u: u): u =
-  let lin =
+(* Remove all constraints over a group of symbols in one shot;
+ * function fv maps a sym to true if it should be dropped (as a set or
+ * as an element), and to false otherwise *)
+let drop_syms (fv: int -> bool) (u: u): u =
+  let fset s = IntSet.exists fv s in
+  let filter_set s =
+    if fset s then IntSet.filter (fun i -> not (fv i)) s
+    else s in
+  let lin = (* remove constraints where a removed sym appears as an element *)
     IntMap.fold
       (fun i c acc ->
-        let b = IntSet.fold (fun j acc -> acc || f j) c.sl_elts false in
+        let b = IntSet.exists fv c.sl_elts in
         if b then IntMap.remove i acc else acc
       ) u.u_lin u.u_lin in
-  let mem =
-    IntMap.fold
-      (fun i c acc ->
-        let b = IntSet.fold (fun j acc -> acc || f j) c false in
-        if b then IntMap.remove i acc else acc
-      ) u.u_mem u.u_mem in
-  { u with u_lin = lin; u_mem = mem }
-
-(* Remove all constraints over a group of setvs in one shot;
- * function fv maps a setv to true if it should be dropped, and to false
- * otherwise *)
-let drop_setvs (fv: int -> bool) (u: u): u =
-  let fset s = IntSet.fold (fun i acc -> acc || fv i) s false in
-  let filter_set s =
-    if fset s then
-      IntSet.fold
-        (fun i acc -> if fv i then acc else IntSet.add i acc) s IntSet.empty
-    else s in
-  let lin, rem =
+  let lin, rem = (* do the same for set, but try to preserve constraints *)
     IntMap.fold
       (fun i c (acc, rem) ->
         if fv i || fset c.sl_sets then IntMap.remove i acc, (i,c) :: rem
         else acc, rem
-      ) u.u_lin (u.u_lin, [ ]) in
+      ) lin (lin, [ ]) in
   let lin =
     if List.length rem > 1 then
       let f (i,c) =
@@ -520,11 +504,9 @@ let drop_setvs (fv: int -> bool) (u: u): u =
       let rem = List.sort (fun (_,i) (_,j) -> i - j) rem in
       let rem = List.map fst rem in
       match rem with
-      | (i0, sl0) :: (i1, sl1) :: _ ->
-          (* tries to save a constraint *)
+      | (i0, sl0) :: (i1, sl1) :: _ -> (* tries to preserves a constraint *)
           if sl_subset sl0 sl1 then
             let sl = sl_add (sl_sub sl1 sl0) (sl_one_set i0) in
-            Printf.printf "producing: %d :> %s\n" i1 (sl_2str sl);
             IntMap.add i1 sl lin
           else lin
       | _ -> lin
@@ -548,15 +530,15 @@ let drop_setvs (fv: int -> bool) (u: u): u =
       ) u.u_eqs u.u_eqs in
   let mem =
     IntMap.fold
-      (fun i _ acc ->
-        if fv i then IntMap.remove i acc
-        else acc
+      (fun i c acc ->
+        let b = IntSet.exists fv c in
+        if b then IntMap.remove i acc else acc
       ) u.u_mem u.u_mem in
+  let mem = IntMap.filter (fun i _ -> not (fv i)) mem in
   { u_lin = lin;
     u_sub = sub;
     u_mem = mem;
     u_eqs = eqs }
-
 
 (* Removal of all the constraints on a set of symbols *)
 let forget (l: sym list): t -> t = function
@@ -565,7 +547,7 @@ let forget (l: sym list): t -> t = function
       let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
       let f i = IntSet.mem i svset in
       (* TODO: merge drop_symb_svs into drop_setvs *)
-      Some (drop_symb_svs f u)
+      Some (drop_syms f u)
 
 (* Renaming *)
 let rename_symbols (r: sym Rename.t): t -> t = function
