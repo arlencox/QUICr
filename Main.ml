@@ -102,6 +102,7 @@ let get_stream fname =
 
 
 let run () =
+  let opt_time = ref false in
   (* assemble command line arguments *)
   let args = 
     domains @
@@ -109,6 +110,8 @@ let run () =
     combinators @
     [arg_blank] @
     SDSL.Interp.args @
+    [arg_blank] @
+    [("-time", Arg.Set opt_time, " Report analysis time")] @
     [arg_blank]
   in
   let args = Arg.align args in
@@ -161,7 +164,12 @@ let run () =
   in
 
   (* run the analysis *)
+  let start_time = Unix.gettimeofday () in
   I.interpret ast;
+  let end_time = Unix.gettimeofday () in
+
+  if !opt_time then
+    Format.printf "Analysis time: %f seconds@." (end_time -. start_time);
 
   (* clean up *)
   close ()

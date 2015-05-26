@@ -146,17 +146,22 @@ module Make(D: Interface.Domain
     let ctx = D.init () in
     let rec interpret state = function
       | Skip -> state
-      | Kill v ->
-        if !print_step then Format.printf "@,kill %s" v;
-        let v = get_or_fresh v in
-        let state = D.forget [v] state in
+      | Kill l ->
+        if !print_step then begin
+          Format.printf "@,kill";
+          List.iter (fun v -> Format.printf " %s" v) l
+        end;
+        let l = List.map get_or_fresh l in
+        let state = D.forget l state in
         if !print_step then print_state renv state;
         state
-      | Rename (v1, v2) ->
-        if !print_step then Format.printf "@,rename %s %s" v1 v2;
-        let v1 = get_or_fresh v1 in
-        let v2 = get_or_fresh v2 in
-        let state = D.rename_symbols (Rename.singleton v1 v2) state in
+      | Rename l ->
+        if !print_step then begin
+          Format.printf "@,rename";
+          List.iter (fun (a,b) -> Format.printf " %s %s" a b) l
+        end;
+        let l = List.map (fun (a,b) -> (get_or_fresh a, get_or_fresh b)) l in
+        let state = D.rename_symbols (Rename.of_assoc_list l) state in
         if !print_step then print_state renv state;
         state
       | Seq (t1, t2) -> interpret (interpret state t1) t2

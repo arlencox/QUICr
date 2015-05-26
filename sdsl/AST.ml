@@ -8,8 +8,8 @@ type t =
   | Branch of t * t
   | Both of t * t
   | Loop of t
-  | Kill of var
-  | Rename of var * var
+  | Kill of var list
+  | Rename of (var * var) list
   | Assign of var * var L.e
   | Choose of var * var
   | Assume of var L.t

@@ -69,8 +69,8 @@ program
 statement
   : { AST.Skip }
   | IDENT EQUAL expr { AST.Assign($1,$3) }
-  | KILL IDENT { AST.Kill $2 }
-  | RENAME IDENT IDENT { AST.Rename ($2,$3) }
+  | KILL ident_list { AST.Kill $2 }
+  | RENAME ident_pair_list { AST.Rename $2 }
   | statement SEMI statement { AST.Seq($1,$3) }
   | BRANCH LCURLY statement RCURLY ELSE LCURLY statement RCURLY {
       AST.Branch ($3,$7)
@@ -125,3 +125,12 @@ expr
   | LPAREN expr RPAREN { $2 }
   ;
 
+ident_list
+  :  { [] }
+  | IDENT ident_list { $1::$2 }
+  ;
+
+ident_pair_list
+  :  { [] }
+  | IDENT IDENT ident_pair_list { ($1,$2)::$3 }
+  ;

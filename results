@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+
+import os
+import time
+import tabulate
+import subprocess
+import re
+import pexpect
+import sys
+
+timeout = 3.0
+
+
+def run_test(config, fname):
+    command = "./Main.native %s -time tests/%s" % (config, fname)
+    print >> sys.stderr, command
+    (outp,status) = pexpect.run(command, timeout=timeout, withexitstatus=True)
+
+    if status == None:
+        # time out
+        run_time = timeout
+        result = "T"
+    else:
+        res = re.search(r"Analysis time: ([^ ]+) seconds", outp)
+        if res == None:
+            run_time = "Err"
+            result   = "Err"
+        else:
+            run_time = float(res.group(1))
+            result = "F" if "Warning" in outp else "P"
+
+    table[fname][config] = (run_time, result)
+
+
+def main():
+    global table
+    global configt
+    configs = open("configurations").readlines()
+    configs = [ config.strip() for config in configs ]
+    configs = [ config for config in configs if config != "" ]
+    configs = [ config for config in configs if config[0] != "#" ]
+
+    tests = next(os.walk("tests"))[2]
+    tests = [ test for test in tests if test.endswith(".sdsl") ]
+
+    table = {}
+    configt = {}
+
+    for config in configs:
+        configt[config] = 0.0
+
+    for test in tests:
+        table[test] = {}
+        for config in configs:
+            table[test][config] = "NR"
+            run_test(config, test)
+
+    header_nums = [ "(%d)" % (x+1) for x in range(len(configs)) ]
+
+    sumable = [ [ (table[test][cfg][0], 1 if table[test][cfg][1] == "P" else 0) for test in tests] for cfg in configs ]
+
+    sumable = [ sum([ test[x] for test in cfg]) for cfg in sumable for x in range(2) ]
+
+
+    total = [ sum([x for test in tests]) for cfg in configs ]
+
+    tbl = [ [test] + [ x for cfg in configs for x in table[test][cfg] ] for test in tests]
+    tbl.append ( ["Total"] + sumable )
+
+
+    headers = [ "Test" ] + [ x for x in header_nums for y in range(2) ]
+
+    print "# Benchmark Results"
+
+    print ""
+
+    print tabulate.tabulate(tbl, headers=headers, floatfmt=".3f", stralign="left", numalign="right", tablefmt="pipe")
+
+    print ""
+
+    print "- T: Timeout"
+    print "- P: Pass -- No warnings"
+    print "- F: Fail -- Warnings raised"
+
+    print ""
+
+    for (n,c) in zip(header_nums, configs):
+        print "- %s:  %s" % (n,c)
+
+    #for test in tests:
+    #    print "%s\t%s" % (test,"\t".join([ table[test][cfg] for cfg in configs ]))
+    #
+    #print "total\t%s" % ("\t".join([ "%.2f" % (configt[cfg]) for cfg in configs ]))
+
+    #for config in configs:
+    #    print config
+        
+main()

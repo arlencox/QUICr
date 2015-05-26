@@ -1,0 +1,7 @@
+-bdd-full -sing
+-bdd-full -pack -sing
+-bdd-full -eq -sing
+-bdd-full -eq -pack -sing
+-bdd-full -pack -eq -sing
+-qbf depqbf -sing
+-lin

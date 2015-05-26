@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean benchmark
 
 PACKS=$(wildcard *.mlpack)
 TARGETS=$(patsubst %.mlpack,%.cma,$(PACKS)) $(patsubst %.mlpack,%.cmxa,$(PACKS))
@@ -10,4 +10,7 @@ all:
 
 clean:
 	ocamlbuild -clean
+	rm BENCHMARKS.md
 
+benchmark:
+	python results > BENCHMARKS.md
