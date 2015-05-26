@@ -475,8 +475,102 @@ let serialize (x: t): output =
 
 
 (** Manipulating symbols *)
-let forget _ = failwith "forget"
-let rename_symbols _ = failwith "rename_symbols"
+
+(* Auxilliary functions for symbols removal *)
+
+(* Remove all constraints over a group of svs in one shot;
+* function f maps a symbolic variable to true if it should be dropped,
+ * and to false otherwise. *)
+let drop_symb_svs (f: int -> bool) (u: u): u =
+  let lin =
+    IntMap.fold
+      (fun i c acc ->
+        let b = IntSet.fold (fun j acc -> acc || f j) c.sl_elts false in
+        if b then IntMap.remove i acc else acc
+      ) u.u_lin u.u_lin in
+  let mem =
+    IntMap.fold
+      (fun i c acc ->
+        let b = IntSet.fold (fun j acc -> acc || f j) c false in
+        if b then IntMap.remove i acc else acc
+      ) u.u_mem u.u_mem in
+  { u with u_lin = lin; u_mem = mem }
+
+(* Remove all constraints over a group of setvs in one shot;
+ * function fv maps a setv to true if it should be dropped, and to false
+ * otherwise *)
+let drop_setvs (fv: int -> bool) (u: u): u =
+  let fset s = IntSet.fold (fun i acc -> acc || fv i) s false in
+  let filter_set s =
+    if fset s then
+      IntSet.fold
+        (fun i acc -> if fv i then acc else IntSet.add i acc) s IntSet.empty
+    else s in
+  let lin, rem =
+    IntMap.fold
+      (fun i c (acc, rem) ->
+        if fv i || fset c.sl_sets then IntMap.remove i acc, (i,c) :: rem
+        else acc, rem
+      ) u.u_lin (u.u_lin, [ ]) in
+  let lin =
+    if List.length rem > 1 then
+      let f (i,c) =
+        (i,c), IntSet.cardinal c.sl_elts + IntSet.cardinal c.sl_sets in
+      let rem = List.map f rem in
+      let rem = List.sort (fun (_,i) (_,j) -> i - j) rem in
+      let rem = List.map fst rem in
+      match rem with
+      | (i0, sl0) :: (i1, sl1) :: _ ->
+          (* tries to save a constraint *)
+          if sl_subset sl0 sl1 then
+            let sl = sl_add (sl_sub sl1 sl0) (sl_one_set i0) in
+            Printf.printf "producing: %d :> %s\n" i1 (sl_2str sl);
+            IntMap.add i1 sl lin
+          else lin
+      | _ -> lin
+    else lin in
+  let sub =
+    IntMap.fold
+      (fun i sub acc ->
+        if fv i then acc
+        else IntMap.add i (filter_set sub) acc
+      ) u.u_sub IntMap.empty in
+  let eqs =
+    IntMap.fold
+      (fun i s acc ->
+        if fv i then IntMap.remove i acc
+        else if fset s then
+          let fs = filter_set s in
+          if IntSet.cardinal fs = 1 && IntSet.mem i fs then
+            IntMap.remove i acc
+          else IntMap.add i fs acc
+        else acc
+      ) u.u_eqs u.u_eqs in
+  let mem =
+    IntMap.fold
+      (fun i _ acc ->
+        if fv i then IntMap.remove i acc
+        else acc
+      ) u.u_mem u.u_mem in
+  { u_lin = lin;
+    u_sub = sub;
+    u_mem = mem;
+    u_eqs = eqs }
+
+
+(* Removal of all the constraints on a set of symbols *)
+let forget (l: sym list): t -> t = function
+  | None -> None
+  | Some u ->
+      let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
+      let f i = IntSet.mem i svset in
+      (* TODO: merge drop_symb_svs into drop_setvs *)
+      Some (drop_symb_svs f u)
+
+(* Renaming *)
+let rename_symbols (r: sym Rename.t): t -> t = function
+  | None -> None
+  | Some u -> failwith "rename_symbols"
 
 
 (** Lattice binary operations *)
@@ -691,90 +785,6 @@ module Set_lin =
       { t_t     = uo;
         t_roots = IntSet.empty; }
 
-    (* Remove all constraints over a group of svs in one shot;
-     * function f maps a symbolic variable to true if it should be dropped,
-     * and to false otherwise. *)
-    let drop_symb_svs (f: int -> bool) (x: t): t =
-      match x.t_t with
-      | None -> x
-      | Some u ->
-          let lin =
-            IntMap.fold
-              (fun i c acc ->
-                let b = IntSet.fold (fun j acc -> acc || f j) c.sl_elts false in
-                if b then IntMap.remove i acc else acc
-              ) u.u_lin u.u_lin in
-          let mem =
-            IntMap.fold
-              (fun i c acc ->
-                let b = IntSet.fold (fun j acc -> acc || f j) c false in
-                if b then IntMap.remove i acc else acc
-              ) u.u_mem u.u_mem in
-          { x with t_t = Some { u with u_lin = lin; u_mem = mem } }
-
-    (* Remove all constraints over a group of setvs in one shot;
-     * function fv maps a setv to true if it should be dropped, and to false
-     * otherwise *)
-    let drop_setvs (fv: int -> bool) (x: t): t =
-      let fset s = IntSet.fold (fun i acc -> acc || fv i) s false in
-      let filter_set s =
-        if fset s then
-          IntSet.fold
-            (fun i acc -> if fv i then acc else IntSet.add i acc) s IntSet.empty
-        else s in
-      match x.t_t with
-      | None -> x
-      | Some u ->
-          let lin, rem =
-            IntMap.fold
-              (fun i c (acc, rem) ->
-                if fv i || fset c.sl_sets then IntMap.remove i acc, (i,c) :: rem
-                else acc, rem
-              ) u.u_lin (u.u_lin, [ ]) in
-          let lin =
-            if List.length rem > 1 then
-              let f (i,c) =
-                (i,c), IntSet.cardinal c.sl_elts + IntSet.cardinal c.sl_sets in
-              let rem = List.map f rem in
-              let rem = List.sort (fun (_,i) (_,j) -> i - j) rem in
-              let rem = List.map fst rem in
-              match rem with
-              | (i0, sl0) :: (i1, sl1) :: _ ->
-                  (* tries to save a constraint *)
-                  if sl_subset sl0 sl1 then
-                    let sl = sl_add (sl_sub sl1 sl0) (sl_setv i0) in
-                    Printf.printf "producing: %d :> %s\n" i1 (sl_2str sl);
-                    IntMap.add i1 sl lin
-                  else lin
-              | _ -> lin
-            else lin in
-          let sub =
-            IntMap.fold
-              (fun i sub acc ->
-                if fv i then acc
-                else IntMap.add i (filter_set sub) acc
-              ) u.u_sub IntMap.empty in
-          let eqs =
-            IntMap.fold
-              (fun i s acc ->
-                if fv i then IntMap.remove i acc
-                else if fset s then
-                  let fs = filter_set s in
-                  if IntSet.cardinal fs = 1 && IntSet.mem i fs then
-                    IntMap.remove i acc
-                  else IntMap.add i fs acc
-                else acc
-              ) u.u_eqs u.u_eqs in
-          let mem =
-            IntMap.fold
-              (fun i _ acc ->
-                if fv i then IntMap.remove i acc
-                else acc
-              ) u.u_mem u.u_mem in
-          { x with t_t = Some { u_lin = lin;
-                                u_sub = sub;
-                                u_mem = mem;
-                                u_eqs = eqs } }
 
 
     (** A bit of reduction, for internal use only *)
@@ -850,32 +860,6 @@ module Set_lin =
           else u
         else u in
       t_map u_aux t
-
-
-    (** Management of symbolic variables *)
-
-    let sv_rem (sv: sv) (t: t): t =
-      drop_symb_svs ((=) sv) t
-
-    let setv_rem (setv: int) (t: t): t =
-      let loc_debug = debug_module in
-      if loc_debug then
-        Printf.printf "removing setv S[%d] in\n%s\n" setv (t_2stri "  " t);
-      let t = t_reduce_lin setv t in
-      let t = t_reduce_eq setv t in
-      if loc_debug then
-        Printf.printf "reduction done:\n%s\n" (t_2stri "  " t);
-      let t = drop_setvs ((=) setv) t in
-      let t = { t with t_roots = IntSet.remove setv t.t_roots } in
-      if loc_debug then
-        Printf.printf "removed setv S[%d]:\n%s\n" setv (t_2stri "  " t);
-      t
-
-
-    (** Forget (if the meaning of the sv changes) *)
-    let forget (sv: int) (t: t): t = (* will be used for assign *)
-      let f i = i = sv in
-      drop_symb_svs f t
 
 
     (** Renaming (e.g., post join) *)
