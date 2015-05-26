@@ -306,7 +306,7 @@ To time the analysis (ignoring the frontend time), use the `-time` option.
 
 ### Benchmarking set domains
 
-The benchmarks for the domains are shown [here](blob/master/BENCHMARKS.md).
+The benchmarks for the domains are shown [here](BENCHMARKS.md).
 This table is generated from the `results` python script by running `make
 benchmark`.  This runs every test contained in `tests/*.sdsl` using each
 configuration given in `configurations`.
