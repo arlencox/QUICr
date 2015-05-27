@@ -92,17 +92,26 @@ let usage =
   "  be specified.  Extra domains on the stack are ignored and will issue a\n" ^
   "  warning.\n"
 
+type ft =
+  | FT_SDSL
+  | FT_STRACE
 
-let stream = ref ((fun () -> ()),stdin)
+
+let stream = ref ((fun () -> ()),stdin,FT_SDSL)
 
 let get_stream fname =
+  let l = String.length fname in
+  let ft = if (String.sub fname (l-7) 7) = ".strace" then
+      FT_STRACE
+    else
+      FT_SDSL
+  in
   let fin = open_in fname in
-  stream := ((fun () -> close_in fin), fin)
+  stream := ((fun () -> close_in fin), fin, ft)
 
 
 
 let run () =
-  let opt_time = ref false in
   (* assemble command line arguments *)
   let args = 
     domains @
@@ -110,8 +119,6 @@ let run () =
     combinators @
     [arg_blank] @
     SDSL.Interp.args @
-    [arg_blank] @
-    [("-time", Arg.Set opt_time, " Report analysis time")] @
     [arg_blank]
   in
   let args = Arg.align args in
@@ -150,26 +157,38 @@ let run () =
   in
   let module D = (val d) in
   let module I = SDSL.Interp.Make(D) in
+  let module IT = DDom.Interp.Make(D) in
 
   (* do parsing *)
-  let (close,stream) = !stream in
+  let (close,stream,ft) = !stream in
   let lexbuf = Lexing.from_channel stream in
-  let ast = try
-      SDSL.Parser.program SDSL.Lexer.token lexbuf
-    with Parsing.Parse_error ->
-      let pos = lexbuf.Lexing.lex_curr_p in
-      Format.printf "(%d:%d) Parse error@."
-        pos.Lexing.pos_lnum (pos.Lexing.pos_cnum - pos.Lexing.pos_bol);
-      exit 1
-  in
+  begin match ft with
+  | FT_SDSL ->
+    let ast = try
+        SDSL.Parser.program SDSL.Lexer.token lexbuf
+      with Parsing.Parse_error ->
+        let pos = lexbuf.Lexing.lex_curr_p in
+        Format.printf "(%d:%d) Parse error@."
+          pos.Lexing.pos_lnum (pos.Lexing.pos_cnum - pos.Lexing.pos_bol);
+        exit 1
+    in
 
-  (* run the analysis *)
-  let start_time = Unix.gettimeofday () in
-  I.interpret ast;
-  let end_time = Unix.gettimeofday () in
+    (* run the analysis *)
+    I.interpret ast;
+  | FT_STRACE ->
+    let ast = try
+        DDom.Parser.trace DDom.Lexer.token lexbuf
+      with Parsing.Parse_error ->
+        let pos = lexbuf.Lexing.lex_curr_p in
+        Format.printf "(%d:%d) Parse error@."
+          pos.Lexing.pos_lnum (pos.Lexing.pos_cnum - pos.Lexing.pos_bol);
+        exit 1
+    in
 
-  if !opt_time then
-    Format.printf "Analysis time: %f seconds@." (end_time -. start_time);
+    (* run the analysis *)
+    IT.interpret ast
+
+  end;
 
   (* clean up *)
   close ()

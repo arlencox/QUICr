@@ -63,11 +63,14 @@ let color_inv = ref (Color.color true Color.Cyan)
 
 let state_brace = ref false
 
+let opt_time = ref false
+
 let args = [
   "-final", Arg.Set print_final, " Print the final abstract state";
   "-step",  Arg.Set print_step,  " Print each step of the interpretation and final state";
   "-color", Arg.String (fun s -> color_inv := Color.of_string s), "<color> Set color of abstract states";
   "-brace", Arg.Set state_brace, " Show braces for abstract states";
+  "-time", Arg.Set opt_time, " Report analysis time";
 ]
 
 module Make(D: Interface.Domain
@@ -76,6 +79,33 @@ module Make(D: Interface.Domain
              and type output = int LogicSymbolicSet.t
              and type query = int LogicSymbolicSet.q)
 = struct
+
+let print_state_raw pp_sym state =
+  if !state_brace then begin
+    Format.print_cut ();
+    Format.open_vbox 0;
+    Format.open_vbox 2;
+    Format.print_string !color_inv;
+    Format.print_string "[";
+    Format.print_cut ();
+    D.pp_print pp_sym Format.std_formatter state;
+    (*L.pp Format.pp_print_string Format.std_formatter c;*)
+    Format.close_box ();
+    Format.print_cut ();
+    Format.print_string "]";
+    Format.print_string (Color.color false Color.Reset);
+    Format.close_box ()
+  end else begin
+    Format.print_cut ();
+    Format.open_vbox 2;
+    Format.print_string "  ";
+    Format.print_string !color_inv;
+    D.pp_print pp_sym Format.std_formatter state;
+    (*L.pp Format.pp_print_string Format.std_formatter c;*)
+    Format.print_string (Color.color false Color.Reset);
+    Format.close_box ()
+  end
+
 
   let print_state renv state =
     (*let c = D.serialize state in*)
@@ -89,31 +119,7 @@ module Make(D: Interface.Domain
         Format.pp_print_int ff s
     in
 
-    if !state_brace then begin
-      Format.print_cut ();
-      Format.open_vbox 0;
-      Format.open_vbox 2;
-      Format.print_string !color_inv;
-      Format.print_string "[";
-      Format.print_cut ();
-      D.pp_print pp_sym Format.std_formatter state;
-      (*L.pp Format.pp_print_string Format.std_formatter c;*)
-      Format.close_box ();
-      Format.print_cut ();
-      Format.print_string "]";
-      Format.print_string (Color.color false Color.Reset);
-      Format.close_box ()
-    end else begin
-      Format.print_cut ();
-      Format.open_vbox 2;
-      Format.print_string "  ";
-      Format.print_string !color_inv;
-      D.pp_print pp_sym Format.std_formatter state;
-      (*L.pp Format.pp_print_string Format.std_formatter c;*)
-      Format.print_string (Color.color false Color.Reset);
-      Format.close_box ()
-    end
-
+    print_state_raw pp_sym state
 
     (*Format.printf "@,@[<v 0>[@[<v 2>@,%s%a%s@]@,]@]" !color_inv (L.pp Format.pp_print_string) c (Color.color false Color.Reset)*)
 
@@ -143,6 +149,7 @@ module Make(D: Interface.Domain
     let temporary () =
       !count
     in
+    let start_time = Unix.gettimeofday () in
     let ctx = D.init () in
     let rec interpret state = function
       | Skip -> state
@@ -250,9 +257,13 @@ module Make(D: Interface.Domain
     in
     if !print_step || !print_final then Format.printf "@[<v 0>";
     let final = interpret (D.top ctx) p in
+    let end_time = Unix.gettimeofday () in
     if !print_final then
       print_state renv final;
-    if !print_step || !print_final then Format.printf "@]@."
+    if !print_step || !print_final then Format.printf "@]@.";
+    if !opt_time then
+      Format.printf "Analysis time: %f seconds@." (end_time -. start_time)
+
       
 
 

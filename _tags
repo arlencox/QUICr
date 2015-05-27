@@ -10,6 +10,7 @@
 <sing/*>: for-pack(Sing)
 <sat/*>: for-pack(SAT)
 <ds/*>: for-pack(DS)
+<ddom/*>: for-pack(DDom)
 <debug-print/*>: for-pack(DebugPrint)
 <Main.*>: package(str)
 <*> or <bdd-full/*>: package(mlbdd)
