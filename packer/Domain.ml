@@ -61,7 +61,10 @@ module Make (D: Interface.Domain
               Format.fprintf ff " ∧ ";
             D.pp_print pp_sym ff d
           end
-        ) t.doms
+        ) t.doms;
+      if !first then
+        Format.fprintf ff "true"
+
 
   let pp_debug pp_sym ff t =
     match t with
