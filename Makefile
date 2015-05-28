@@ -10,7 +10,6 @@ all:
 
 clean:
 	ocamlbuild -clean
-	-rm BENCHMARKS.md
 
 benchmark:
 	python results > BENCHMARKS.md
