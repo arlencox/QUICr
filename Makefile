@@ -12,4 +12,4 @@ clean:
 	ocamlbuild -clean
 
 benchmark:
-	python results > BENCHMARKS.md
+	python scripts/results > BENCHMARKS.md
