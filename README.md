@@ -130,6 +130,7 @@ manipulating symbolic sets.  The language has the following syntax:
 
 ```
 k ::= x = e
+    | x = choose e               // overwrite x with an element of e
     | k; k                       // sequencing two commands
     | branch { k } else { k }    // non-deterministic branch
     | both { k } and { k }       // execute both branches in parallel
@@ -137,12 +138,14 @@ k ::= x = e
     | if ( c ) { k } else { k }
     | while ( c ) { k }          // looping
     | loop { k }                 // non-deterministic loop
+    | for ( x in e ) { k }       // loop over elements of e (e is mutable)
     | kill x                     // project out variable
     | rename x y                 // rename the variable x to be variable y
     | assume ( c )               // make an assumption about state
     | assert ( c )               // check property
 
-e ::= v                          // set variable
+e ::= {}                         // empty set
+    |  v                         // set variable
     | { v }                      // singleton set
     | e U e                      // union
     | e U+ e                     // disjoint union
@@ -237,6 +240,75 @@ At this point the analyzer would be run with the topmost domain
 Log("output.txt", BDD(2)) and would raise a warning for not using all of the
 domains on the stack; the domain BDD(1) would remain unused.
 
+## Trace inputs
+
+To help in comparing abstract domains as used by other tools, the analyzer
+supports the ability to replay traces.  Traces with the extension `*.strace`
+and have the following format where `x` and `y` are variables that represent
+abstract states, `v`, `v1`, etc are dimensions (integers) in the abstract
+state.
+
+```
+k ::= let x = t                         // evaluate a transfer function
+    | le x y                            // compare abstract states x and y
+    | is_bottom x                       // check if abstract state x is bottom
+    | is_top x                          // check if abstract state x is top
+    | sat x c                           // check if abstract state satisfies constraint
+
+t ::= top                               // return top
+    | bottom                            // return top
+    | constrain c x                     // return x constrained by c
+    | join x y                          // overapproximate disjunction of abstract states x and y
+    | widening x y                      // overapproximate disjunction of abstract states x and y (terminating)
+    | meet x y                          // overapproximate conjunction of abstract states x and y
+    | forget v1 v2 ... x                // drop dimensions v1, v2 etc from x
+    | rename [v1 -> v2; v3 -> v4 ...] x // rename dimension v1 to v2, and v3 to v4 in x
+
+e ::= {}                                // empty set
+    |  v                                // set variable
+    | { v }                             // singleton set
+    | e U e                             // union
+    | e U+ e                            // disjoint union
+    | e \ e                             // set difference
+    | e ^ e                             // intersection
+    | ~e                                // set complement
+
+c ::= e = e                             // set equality
+    | e <= e                            // subset or equality
+    | v in e                            // element containment
+```
+
+The result of running an analysis on a trace is statistics of the run:
+
+```
+$ ./Main.native -lin tests/test1.strace 
+
+sat: 0/1
+le : 0/0
+bot: 1/1
+top: 1/1
+```
+
+This shows the four kinds of query and the ratio of `true` results to total
+results for those queries.
+
+## Benchmarking set domains
+
+The benchmarks for the domains are shown [here](BENCHMARKS.md).  This table is
+generated from the `results` python script by running `make benchmark`.  This
+runs every test contained in `tests/*.sdsl` or `tests/*.strace` using each
+configuration given in `configurations`.
+
+The `configurations` file contains a list of options for the `Main.native`
+tool.  Each line is a unique configuration.  Lines that have # in the first
+column are comments.
+
+The `results` script depends on two python libraries:
+
+```
+pip install pexpect tabulate
+```
+
 ## Adding new abstract domains and combinators
 
 The SDSL abstract interpreter (and QUICr) is designed to ease the addition of
@@ -286,38 +358,4 @@ Modify the `Main.ml` file to add the following line to the `domains` list:
 
 Note that there is a blank space before the description.  The first word in the
 description documents the argument for the domain (if there is one).
-
-## Running the DSL tool
-
-The DSL tool can be run using the `Main.native` or `Main.d.byte` commands
-followed by appropriate arguments.  For example the following command analyzes
-the code in tests/for-in-update.sdsl using a BDD-based set domain with support for
-syntactic singletons:
-
-```
-$ ./Main.native -bdd-full -sing tests/for-in-update.sdsl
-```
-
-To get output after each step of the analysis, the `-step` option can be used
-and to get the abstract state at the end of the program, the `-final` option
-can be used.
-
-To time the analysis (ignoring the frontend time), use the `-time` option.
-
-### Benchmarking set domains
-
-The benchmarks for the domains are shown [here](BENCHMARKS.md).
-This table is generated from the `results` python script by running `make
-benchmark`.  This runs every test contained in `tests/*.sdsl` using each
-configuration given in `configurations`.
-
-The `configurations` file contains a list of options for the `Main.native`
-tool.  Each line is a unique configuration.  Lines that have # in the first
-column are comments.
-
-The `results` script depends on two python libraries:
-
-```
-pip install pexpect tabulate
-```
 
