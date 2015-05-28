@@ -177,6 +177,8 @@ printing and usability options.
   `yellow`, `blue`, `magenta`, `cyan`, and `white`.  Additionally each color can
   be converted to it's "bright" version by appending it with `!`.  For example,
   `red!` would be bright red.
+- `-time` Times the analysis (excluding parse/prepreocess time) and reports the
+  total time at the end of the analysis.
 
 Options as above can be set on each command line.  However if they should
 persist, they can be assigned through an environment variable.  Use the
