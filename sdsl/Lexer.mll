@@ -27,6 +27,8 @@ rule token = parse
   | "while" { WHILE }
   | "kill" { KILL }
   | "else" { ELSE }
+  | "choose" { CHOOSE }
+  | "for" { FOR }
   | "\\" { DIFF }
   | "U" { UNION }
   | "U+" { DISJUNION }

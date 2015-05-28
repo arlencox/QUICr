@@ -7,6 +7,8 @@
 %token WHILE
 %token KILL
 %token ELSE
+%token CHOOSE
+%token FOR
 
 %token DIFF
 %token UNION
@@ -53,7 +55,6 @@ let mkwhile c b =
             AST.Assume c,
             b)),
         AST.Assume(L.Not c))
-
 %}
 
 
@@ -69,6 +70,7 @@ program
 statement
   : { AST.Skip }
   | IDENT EQUAL expr { AST.Assign($1,$3) }
+  | IDENT EQUAL CHOOSE expr { AST.Choose($1,$4) }
   | KILL ident_list { AST.Kill $2 }
   | RENAME ident_pair_list { AST.Rename $2 }
   | statement SEMI statement { AST.Seq($1,$3) }
@@ -86,6 +88,9 @@ statement
     }
   | WHILE LPAREN cond RPAREN LCURLY statement RCURLY {
       mkwhile $3 $6
+    }
+  | FOR LPAREN IDENT IN expr RPAREN LCURLY statement RCURLY {
+      AST.For($3,$5,$8)
     }
   | LOOP LCURLY statement RCURLY {
       AST.Loop($3)

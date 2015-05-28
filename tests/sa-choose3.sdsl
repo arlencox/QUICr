@@ -1,0 +1,9 @@
+assume(lt5 U+ eq5 U+ gt5 = ~{});
+assume(eq1 <= lt5);
+
+kill x;
+assume(x in eq5);
+kill x;
+assume(x in eq1);
+assert(x in lt5);
+

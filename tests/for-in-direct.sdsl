@@ -1,0 +1,7 @@
+res = {};
+
+for(x in s) {
+  res = res U {x};
+};
+
+assert(res = s);

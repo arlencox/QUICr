@@ -1,0 +1,12 @@
+assume(eq1 <= gt0);
+assume(eq3 <= gt0);
+assume(eq1 <= lt4);
+assume(eq3 <= lt4);
+assume(eq1 ^ eq3 = {});
+
+s = eq1 U eq3;
+kill x;
+assume(x in s);
+assert(x in lt4);
+assert(x in gt0);
+

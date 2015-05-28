@@ -1,0 +1,8 @@
+assume (eq3 ^ gt5 = {});
+assume (x in gt5); // x > 5
+s = {x};
+kill x;
+assume (x in eq3);
+kill y;
+assume (y in s);
+assert (y in gt5);

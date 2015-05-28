@@ -1,0 +1,23 @@
+res = {};
+
+// begin loop
+fout = {};
+while(*) {
+  assume(x2 in s \ fout);
+  kill x;
+  rename x2 x;
+
+  // begin loop body
+
+  res = res U {x};
+
+  // end loop body
+  assume(fout2 = fout U+ {x});
+  kill fout;
+  rename fout2 fout;
+};
+assume(fout = s);
+kill fout;
+
+
+assert(res = s);

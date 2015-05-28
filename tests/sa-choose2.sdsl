@@ -1,0 +1,5 @@
+s = {x};
+a = s;
+kill y;
+assume(y in a);
+assert(y = x);

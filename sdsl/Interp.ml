@@ -127,6 +127,11 @@ let print_state_raw pp_sym state =
     let count = ref 0 in
     let env = Hashtbl.create 1023 in
     let renv = Hashtbl.create 1023 in
+    let unnamed () =
+      let id = !count in
+      incr count;
+      id
+    in
     let fresh sym =
       let id = !count in
       incr count;
@@ -211,6 +216,55 @@ let print_state_raw pp_sym state =
         if !print_step then Format.printf "@]@,}";
         if !print_step then print_state renv state;
         state
+      | For(v,e,t) ->
+        if !print_step then Format.printf "@,@[<v 2>for(%s in %a) {" v (L.pp_e Format.pp_print_string) e;
+        if !print_step then print_state renv state;
+
+        let e = L.map_symbol_e get_or_fresh e in
+        let vid = get_or_fresh v in
+        let vid' = unnamed () in
+
+        let visit_id = unnamed () in
+        let visit_id' = unnamed () in
+
+        let rec loop i invstate =
+          if !print_step then Format.printf "@,@[<v 2>%d: {" (i+1);
+          let body_end =
+            invstate |>
+            D.constrain (L.In(vid', L.Diff(e, L.Var visit_id))) |>
+            D.forget [vid] |>
+            D.rename_symbols (Rename.singleton vid' vid) |>
+            (fun st -> interpret st t) |>
+            D.constrain (L.Eq(L.Var visit_id', L.DisjUnion(L.Var visit_id, L.Sing vid))) |>
+            D.forget [visit_id] |>
+            D.rename_symbols (Rename.singleton visit_id' visit_id)
+          in
+
+          if !print_step then Format.printf "@]@,}";
+          if D.le body_end invstate then
+            (i,invstate)
+          else begin
+            let invstate = D.widening invstate body_end in
+            if !print_step then print_state renv invstate;
+            loop (i+1) invstate
+          end
+        in
+
+        (* set up for the loop *)
+        let state = D.constrain (L.Eq(L.Var visit_id, L.Empty)) state in
+
+        (* run loop *)
+        let (loopcount,state) = loop 0 state in
+
+        (* clean up from loop *)
+        let state = D.constrain (L.Eq(L.Var visit_id, e)) state in
+        let state = D.forget [visit_id] state in
+
+
+        if !print_step then Format.printf "@]@,}";
+        if !print_step then print_state renv state;
+        state
+
       | Assign (lhs, rhs) ->
         if !print_step then Format.printf "@,%s = %a" lhs (L.pp_e Format.pp_print_string) rhs;
         let rhs = L.map_symbol_e get_or_fresh rhs in
@@ -226,14 +280,16 @@ let print_state_raw pp_sym state =
         if !print_step then print_state renv state;
         state
       | Choose (lhs, rhs) ->
-        if !print_step then Format.printf "@,%s = choose %s" lhs rhs;
-        let rhs = get_or_fresh rhs in
+        if !print_step then Format.printf "@,%s = choose %a" lhs (L.pp_e Format.pp_print_string) rhs;
+        let rhs = L.map_symbol_e get_or_fresh rhs in
         let (do_rename,lid) = if Hashtbl.mem env lhs then (true,temporary ())
           else (false,fresh lhs) in
-        let state = D.constrain (L.SubEq(L.Sing lid, L.Var rhs)) state in
+        let state = D.constrain (L.In(lid, rhs)) state in
         let state = if do_rename then
-            D.rename_symbols (Rename.singleton lid (Hashtbl.find env lhs)) state (*[lid, Hashtbl.find env lhs] state *) (*(fun id -> if id = lid then Hashtbl.find env lhs else id) state*)
-            (*D.rename_symbols [(lid, Hashtbl.find env lhs)] state*)
+            let oldid = Hashtbl.find env lhs in
+            state |>
+            D.forget [oldid] |>
+            D.rename_symbols (Rename.singleton lid oldid) (*[lid,oldid]*) (*(fun id -> if id = lid then oldid else id)*)
           else state in
         if !print_step then print_state renv state;
         state

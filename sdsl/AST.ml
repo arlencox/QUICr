@@ -11,6 +11,7 @@ type t =
   | Kill of var list
   | Rename of (var * var) list
   | Assign of var * var L.e
-  | Choose of var * var
+  | Choose of var * var L.e
   | Assume of var L.t
   | Assert of var L.t
+  | For of var * var L.e * t

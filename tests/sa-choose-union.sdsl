@@ -1,0 +1,6 @@
+assume(y in gt0);
+s = {y};
+kill x;
+assume(x in s);
+s = s U {x};
+assert(s = {y});
