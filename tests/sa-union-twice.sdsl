@@ -1,0 +1,7 @@
+x = choose({eq5}); 
+s = {x};
+y = choose({eq5});
+s = s U {y};
+assert(s <= {eq5});
+assert({eq5} <= s);
+

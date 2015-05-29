@@ -1,0 +1,4 @@
+s3 = s1 ^ s2;
+es3 = choose(s3);
+assert({es3} <= s1);
+assert({es3} <= s2);

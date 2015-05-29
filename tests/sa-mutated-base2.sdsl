@@ -1,0 +1,6 @@
+y = choose({eq5});
+s = {y};
+x = choose(s);
+x = choose({eq5});
+s = s \ {x};
+assert(s = {});

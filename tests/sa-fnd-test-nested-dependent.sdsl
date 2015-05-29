@@ -1,0 +1,12 @@
+assume(Z = lt0 U+ {eq0} U+ gt0);
+
+s = choose({eq0});
+for(x in d) {
+  for(y in d) {
+    if(*) {
+      s = choose(gt0);
+    } else {
+    }
+  }
+};
+assert(s in {eq0} U+ gt0);

@@ -1,0 +1,10 @@
+r = {};
+
+for(x in s) {
+  if(x in gt10) {
+    r = r U {x};
+  }
+};
+assert(r <= s);
+t = choose(r);
+assert(t in gt10);

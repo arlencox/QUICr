@@ -1,0 +1,8 @@
+d = {};
+if({eq1} <= d) {
+  assert(false);
+} else {
+};
+
+d = {x} U+ {y};
+assert(d = {x} U+ {y});

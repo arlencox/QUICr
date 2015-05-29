@@ -1,0 +1,13 @@
+r = {x}; 
+for(y in l) {
+  r = r U {y};
+};
+
+for(y in u) { 
+  r = r U {y};
+};
+
+ref = {x} U l U u;
+
+assert(r <= ref);
+assert(ref <= r);

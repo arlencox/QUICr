@@ -9,6 +9,8 @@
 %token ELSE
 %token CHOOSE
 %token FOR
+%token TRUE
+%token FALSE
 
 %token DIFF
 %token UNION
@@ -116,6 +118,8 @@ cond
   | expr SUBSET expr { Some (L.SubEq ($1, $3)) }
   | IDENT IN expr { Some (L.In ($1, $3)) }
   | NONDET { None }
+  | FALSE { Some L.False }
+  | TRUE { Some L.True }
   ;
 
 expr

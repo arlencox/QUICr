@@ -1,0 +1,7 @@
+kill s;
+r = {};
+x = choose(s);
+if(x in gt10) {
+  r = r U {x};
+};
+assert(r <= s);

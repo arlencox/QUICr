@@ -1,0 +1,7 @@
+x = choose(s);
+a = s \ {x};
+y = choose(a);
+b = a \ {y};
+assert(b <= s);
+assert({y} <= s);
+assert({x} <= s);

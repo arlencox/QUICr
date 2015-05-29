@@ -1,0 +1,5 @@
+S = {x};
+y = x;
+S = S U {y};
+assert({y} <= S);
+assert(S <= {y});

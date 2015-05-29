@@ -29,6 +29,8 @@ rule token = parse
   | "else" { ELSE }
   | "choose" { CHOOSE }
   | "for" { FOR }
+  | "true" { TRUE }
+  | "false" { FALSE }
   | "\\" { DIFF }
   | "U" { UNION }
   | "U+" { DISJUNION }

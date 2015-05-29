@@ -1,0 +1,11 @@
+assume({eq5} ^ {eq7} = {});
+assume({eq5} ^ {eq8} = {});
+assume({eq7} ^ {eq8} = {});
+s = s \ {eq5};
+s = s U {eq7};
+if({eq5} <= s) {
+  assume(t = {eq8});
+} else {
+  assume(t = {});
+};
+assert(t = {});

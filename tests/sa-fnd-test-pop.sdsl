@@ -1,0 +1,9 @@
+assume({v1} ^ {v2} = {});
+d = {};
+d = d U {v1};
+x = choose(d);
+d = d \ {x};
+assert({x} = {v1});
+d = d U {v2};
+y = choose(d);
+assert({y} = {v2});

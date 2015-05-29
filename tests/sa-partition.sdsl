@@ -1,0 +1,18 @@
+l = {}; 
+u = {}; 
+assume(s = ltx U+ {x} U+ gtx);
+for(y in s) {
+  if(y in ltx) {
+    l = l U {y};
+  } else {
+    if (y in gtx) {
+      u = u U {y};
+    }
+  }
+};
+el = choose(l);
+assert(el in ltx);
+eu = choose(u);
+assert(eu in gtx);
+assert(l <= s);
+assert(u <= s);

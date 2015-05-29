@@ -1,0 +1,5 @@
+s3 = s1 U s2;
+es1 = choose(s1);
+assert(es1 in s3);
+es2 = choose(s2);
+assert(es2 in s3);

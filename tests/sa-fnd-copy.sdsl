@@ -1,0 +1,8 @@
+r = {};
+
+for(x in s) {
+  r = r U {x};
+};
+
+assert(r <= s);
+assert(s <= r);

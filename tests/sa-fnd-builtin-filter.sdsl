@@ -1,0 +1,8 @@
+res = {};
+for(x in seq) {
+  if(x in {eq0}) {
+    res = res U {x};
+  }
+};
+cr = choose(res);
+assert({cr} = {eq0});
