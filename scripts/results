@@ -23,6 +23,7 @@ def run_test(config, fname):
     else:
         res = re.search(r"Analysis time: ([^ ]+) seconds", outp)
         if res == None:
+            print >> sys.stderr, "Could not find analysis time"
             run_time = "Err"
             result   = "Err"
         else:

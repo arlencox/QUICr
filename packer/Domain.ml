@@ -500,10 +500,10 @@ module Make (D: Interface.Domain
       ) doms SymMap.empty in
     {doms;pack}*)
 
-  let rename_symbols sym_map {doms;pack} =
+  let rename_symbols ctx sym_map {doms;pack} =
     (* TODO: fix conservative merge of packs for rename *)
     let {doms;pack} = Rename.fold (fun a a' p ->
-        merge_packs a a' p
+        merge_pack_list ctx [a;a'] p
       ) sym_map {doms;pack} in
 
     let renames = Rename.fold (fun a a' renames ->
@@ -526,12 +526,13 @@ module Make (D: Interface.Domain
     {doms;pack}
 
   let rename_symbols sym_map t =
+    let ctx = context t in
     match t with
     | Bottom _
     | Top _ -> t
     | Dom p ->
       if debug then check ~msg:"rename_symbols" p;
-      let p = rename_symbols sym_map p in
+      let p = rename_symbols ctx.dctx sym_map p in
       if debug then check ~msg:"rename_symbols end" p;
       Dom p
 
