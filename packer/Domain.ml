@@ -333,11 +333,11 @@ module Make (D: Interface.Domain
           D.is_top d
         ) p.doms
 
-  let sat t cnstr =
-    match t with
-    | Bottom _ -> true
-    | Top ctx -> D.sat (D.top ctx.dctx) cnstr
-    | Dom p ->
+  let rec sat p cnstr =
+    match cnstr with
+    | L.And(c1,c2) ->
+      sat p c1 && sat p c2
+    | cnstr ->
       if debug then check ~msg:"sat" p;
       let syms = SymSet.elements (syms cnstr) in
       let ctx = SymMap.choose p.doms |> snd |> D.context in
@@ -352,6 +352,14 @@ module Make (D: Interface.Domain
         let srep = SymSets.rep sym pack in
         let d = try SymMap.find srep doms with Not_found -> assert false in
         D.sat d cnstr
+
+
+  let sat t cnstr =
+    match t with
+    | Bottom _ -> true
+    | Top ctx -> D.sat (D.top ctx.dctx) cnstr
+    | Dom p ->
+      sat p cnstr
 
   let forget ctx sym t =
     match t with
@@ -482,7 +490,7 @@ module Make (D: Interface.Domain
     | Dom a, Bottom _ ->
       is_bottom (Dom a)
 
-  let rename_symbols sym_map {doms;pack} =
+  (*let rename_symbols sym_map {doms;pack} =
     let pack = SymSets.rename sym_map pack in
     let doms = SymMap.fold (fun r d doms ->
         let r = Rename.get sym_map r in (* remap r to its new name *)
@@ -490,9 +498,14 @@ module Make (D: Interface.Domain
         let d = D.rename_symbols sym_map d in
         SymMap.add r d doms
       ) doms SymMap.empty in
-    {doms;pack}
+    {doms;pack}*)
 
   let rename_symbols sym_map {doms;pack} =
+    (* TODO: fix conservative merge of packs for rename *)
+    let {doms;pack} = Rename.fold (fun a a' p ->
+        merge_packs a a' p
+      ) sym_map {doms;pack} in
+
     let renames = Rename.fold (fun a a' renames ->
         let r = SymSets.rep a pack in
         let l = try SymMap.find r renames with Not_found -> [] in
