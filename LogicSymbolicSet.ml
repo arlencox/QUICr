@@ -35,7 +35,7 @@ let prec_e = function
   | Empty
   | Universe -> 100
 
-let rec pp_noparen_e pp_sym ff t =
+let rec pp_noparen_e ?parse:(parse=false) pp_sym ff t =
   let pprec = pp_e ~prec:(prec_e t) pp_sym in
   match t with
   | Empty -> Format.fprintf ff "∅"
@@ -48,20 +48,32 @@ let rec pp_noparen_e pp_sym ff t =
   | Var v -> pp_sym ff v
   | Sing v -> Format.fprintf ff "{%a}" pp_sym v
 
-and pp_e ?prec:(p=0) pp_sym ff t =
+and pp_e ?parse:(parse=false) ?prec:(p=0) pp_sym ff t =
   if prec_e t < p then
-    Format.fprintf ff "@[<hv 2>(%a)@]" (pp_noparen_e pp_sym) t
+    Format.fprintf ff "@[<hv 2>(%a)@]" (pp_noparen_e ~parse:parse pp_sym) t
   else
-    pp_noparen_e pp_sym ff t
+    pp_noparen_e ~parse:parse pp_sym ff t
 
-let rec pp pp_sym ff t =
-  let ppe = pp_e pp_sym in
+let rec pp ?parse:(parse=false) pp_sym ff t =
+  let ppe = pp_e ~parse:parse pp_sym in
   match t with
   | Eq (a,b) -> Format.fprintf ff "%a = %a" ppe a ppe b
-  | SubEq (a,b) -> Format.fprintf ff "%a ⊆ %a" ppe a ppe b
-  | In (a,b) -> Format.fprintf ff "%a ∈ %a" pp_sym a ppe b
-  | And (a,b) -> Format.fprintf ff "%a ∧ %a" (pp pp_sym) a (pp pp_sym) b
-  | Not a -> Format.fprintf ff "(not %a)" (pp pp_sym) a
+  | SubEq (a,b) ->
+    if parse then
+      Format.fprintf ff "%a <= %a" ppe a ppe b
+    else
+      Format.fprintf ff "%a ⊆ %a" ppe a ppe b
+  | In (a,b) ->
+    if parse then
+      Format.fprintf ff "%a in %a" pp_sym a ppe b
+    else
+      Format.fprintf ff "%a ∈ %a" pp_sym a ppe b
+  | And (a,b) ->
+    if parse then
+      Format.fprintf ff "%a /\\ %a" (pp ~parse:parse pp_sym) a (pp ~parse:parse pp_sym) b
+    else
+      Format.fprintf ff "%a ∧ %a" (pp ~parse:parse pp_sym) a (pp ~parse:parse pp_sym) b
+  | Not a -> Format.fprintf ff "(not %a)" (pp ~parse:parse pp_sym) a
   | True -> Format.fprintf ff "true"
   | False -> Format.fprintf ff "false"
 

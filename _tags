@@ -11,6 +11,7 @@
 <sat/*>: for-pack(SAT)
 <ds/*>: for-pack(DS)
 <ddom/*>: for-pack(DDom)
+<tracer/*>: for-pack(Tracer)
 <debug-print/*>: for-pack(DebugPrint)
 <Main.*>: package(str)
 <*> or <bdd-full/*>: package(mlbdd)

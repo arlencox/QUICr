@@ -32,7 +32,13 @@
 %token IS_BOTTOM
 %token IS_TOP
 %token <int> INT
+%token AND
+%token TRUE
+%token FALSE
+%token NOT
 
+%left AND
+%left NOT
 
 %left SEMI
 %left DIFF
@@ -84,6 +90,10 @@ cond
   : expr EQUAL expr { L.Eq ($1, $3) }
   | expr SUBSET expr { L.SubEq ($1, $3) }
   | INT IN expr { L.In ($1, $3) }
+  | cond AND cond { L.And ($1, $3) }
+  | NOT cond { L.Not $2 }
+  | TRUE { L.True }
+  | FALSE { L.False }
   ;
 
 expr

@@ -68,6 +68,16 @@ let combinators = [
        push (module P)
      ), " Use debug printer");
 
+  (* trace combinator *)
+  ("-trace", Arg.String (fun s ->
+       let module L = (struct
+         let file = s
+       end) in
+       let module D = (val pop ()) in
+       let module Log = Tracer.Domain.Make(L)(D) in
+       push (module Log)
+     ), "<file> Generate a strace file of domain operations");
+
   (* singleton handler *)
   ("-sing", Arg.Unit (fun () ->
        let module D = (val pop ()) in
