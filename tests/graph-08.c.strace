@@ -1,0 +1,431 @@
+let x0 = bottom
+let x1 = top
+let x2 = constrain 1000001 <= 1000000 x1
+let x3 = forget 3 x2
+let x4 = constrain 1000000 = { 1 } U+ 1000002 x3
+let x5 = constrain 1000001 = 1000004 x4
+let x6 = constrain 1000001 = 1000003 x5
+let x7 = constrain 1000000 = { } x3
+let x8 = constrain 1000000 = { 1 } U+ 1000002 x3
+let x9 = constrain 1000001 = 1000004 x8
+let x10 = constrain 1000001 = 1000003 x9
+let x11 = constrain 1000000 = { } x3
+let x12 = constrain 1000004 = 1000005 x6
+let x13 = constrain 7 in 1000004 x12
+let x14 = forget 1000004 x13
+let x15 = forget 1000004 x6
+let x16 = constrain 1000004 = 1000005 x6
+let x17 = constrain 7 in 1000004 x16
+let x18 = forget 1000004 x17
+let x19 = forget 1000004 x6
+let x20 = constrain 1000005 = 1000004 x14
+let x21 = constrain 9 in 1000005 x20
+let x22 = forget 1000005 x21
+let x23 = forget 1000005 x14
+let x24 = forget 6 x10
+sat x22 1000003 = 1000004
+sat x22 9 in 1000003
+sat x22 7 in 1000003
+sat x22 1000000 = 1000003
+sat x22 1000001 = 1000003
+let x25 = constrain 1000005 = 1000000 x3
+let x26 = constrain 1000006 = 1000001 x25
+let x27 = constrain 1000005 = 1000009 U+ 1000010 x26
+let x28 = constrain 1000006 = 1000007 x27
+let x29 = constrain 1000006 = 1000008 x28
+let x30 = forget 1000005 x29
+let x31 = forget 1000006 x30
+let x32 = constrain 1000005 = { 1 } U+ 1000002 x22
+let x33 = constrain 1000006 = 1000001 x32
+let x34 = constrain 1000005 = 1000009 U+ 1000010 x33
+let x35 = constrain 1000006 = 1000007 x34
+let x36 = constrain 1000006 = 1000008 x35
+sat x36 9 in { 1 } U+ 1000002
+let x37 = forget 1000005 x36
+let x38 = forget 1000006 x37
+let x39 = forget 1000002 x31
+let x40 = forget 1000003 x39
+let x41 = forget 1000004 x40
+let x42 = forget 1000002 x38
+let x43 = forget 1000003 x42
+let x44 = forget 1000004 x43
+let x45 = rename [ 0 -> 0; 1 -> 1; 2 -> 2 ] x41
+let x46 = forget 8 7 6 5 4 3 x44
+let x47 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 9 -> 3 ] x46
+let x48 = widening x45 x47
+sat x18 1000003 = 1000005
+sat x18 7 in 1000003
+sat x18 1000000 = 1000003
+sat x18 1000001 = 1000003
+let x49 = constrain 1000004 = 1000000 x3
+let x50 = constrain 1000006 = 1000001 x49
+let x51 = constrain 1000004 = 1000009 U+ 1000010 x50
+let x52 = constrain 1000006 = 1000007 x51
+let x53 = constrain 1000006 = 1000008 x52
+let x54 = forget 1000004 x53
+let x55 = forget 1000006 x54
+let x56 = constrain 1000004 = { 1 } U+ 1000002 x18
+let x57 = constrain 1000006 = 1000001 x56
+let x58 = constrain 1000004 = 1000009 U+ 1000010 x57
+let x59 = constrain 1000006 = 1000007 x58
+let x60 = constrain 1000006 = 1000008 x59
+sat x60 7 in { 1 } U+ 1000002
+let x61 = forget 1000004 x60
+let x62 = forget 1000006 x61
+let x63 = forget 1000002 x55
+let x64 = forget 1000003 x63
+let x65 = forget 1000005 x64
+let x66 = forget 1000002 x62
+let x67 = forget 1000003 x66
+let x68 = forget 1000005 x67
+let x69 = rename [ 0 -> 0; 1 -> 1; 2 -> 2 ] x65
+let x70 = forget 6 5 4 3 x68
+let x71 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 7 -> 3 ] x70
+let x72 = widening x69 x71
+sat x24 1000000 = 1000003
+sat x24 1000001 = 1000003
+let x73 = constrain 1000005 = 1000000 x3
+let x74 = constrain 1000006 = 1000001 x73
+let x75 = constrain 1000005 = 1000009 U+ 1000010 x74
+let x76 = constrain 1000006 = 1000007 x75
+let x77 = constrain 1000006 = 1000008 x76
+let x78 = forget 1000005 x77
+let x79 = forget 1000006 x78
+let x80 = constrain 1000005 = { 1 } U+ 1000002 x24
+let x81 = constrain 1000006 = 1000001 x80
+let x82 = constrain 1000005 = 1000009 U+ 1000010 x81
+let x83 = constrain 1000006 = 1000007 x82
+let x84 = constrain 1000006 = 1000008 x83
+sat x84 1000003 = 1000004
+let x85 = forget 1000005 x84
+let x86 = forget 1000006 x85
+let x87 = forget 1000002 x79
+let x88 = forget 1000003 x87
+let x89 = forget 1000004 x88
+let x90 = forget 1000002 x86
+let x91 = forget 1000003 x90
+let x92 = forget 1000004 x91
+let x93 = rename [ 0 -> 0; 1 -> 1; 2 -> 2 ] x89
+let x94 = forget 5 4 3 x92
+let x95 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 6 -> 3 ] x94
+let x96 = widening x93 x95
+sat x48 1000000 = 1000010
+sat x48 1000001 = 1000010
+sat x48 1000000 = 1000008
+sat x48 1000001 = 1000008
+sat x48 1000000 = 1000009
+sat x48 1000001 = 1000009
+sat x48 1000000 = 1000007
+sat x48 1000001 = 1000007
+sat x72 1000000 = 1000010
+sat x72 1000001 = 1000010
+sat x72 1000000 = 1000008
+sat x72 1000001 = 1000008
+sat x72 1000000 = 1000009
+sat x72 1000001 = 1000009
+sat x72 1000000 = 1000007
+sat x72 1000001 = 1000007
+let x97 = constrain 1000002 = 1000010 x48
+let x98 = constrain 1000003 = 1000008 x97
+let x99 = constrain 1000004 = 1000009 x98
+let x100 = constrain 1000005 = 1000001 x99
+let x101 = constrain 1000002 = 1000010 x72
+let x102 = constrain 1000003 = 1000008 x101
+let x103 = constrain 1000004 = 1000009 x102
+let x104 = constrain 1000005 = 1000001 x103
+let x105 = forget 1000007 x100
+let x106 = forget 1000008 x105
+let x107 = forget 1000009 x106
+let x108 = forget 1000010 x107
+let x109 = forget 1000007 x104
+let x110 = forget 1000008 x109
+let x111 = forget 1000009 x110
+let x112 = forget 1000010 x111
+let x113 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x108
+let x114 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x112
+let x115 = join x113 x114
+sat x115 1000000 = 1000002
+sat x115 1000001 = 1000002
+sat x115 1000000 = 1000003
+sat x115 1000001 = 1000003
+sat x115 1000000 = 1000004
+sat x115 1000001 = 1000004
+sat x115 1000000 = 1000005
+sat x115 1000001 = 1000005
+sat x96 1000000 = 1000010
+sat x96 1000001 = 1000010
+sat x96 1000000 = 1000008
+sat x96 1000001 = 1000008
+sat x96 1000000 = 1000009
+sat x96 1000001 = 1000009
+sat x96 1000000 = 1000007
+sat x96 1000001 = 1000007
+let x116 = constrain 1000006 = 1000002 x115
+let x117 = constrain 1000011 = 1000003 x116
+let x118 = constrain 1000012 = 1000004 x117
+let x119 = constrain 1000013 = 1000001 x118
+let x120 = constrain 1000006 = 1000010 x96
+let x121 = constrain 1000011 = 1000008 x120
+let x122 = constrain 1000012 = 1000009 x121
+let x123 = constrain 1000013 = 1000001 x122
+let x124 = forget 1000002 x119
+let x125 = forget 1000003 x124
+let x126 = forget 1000004 x125
+let x127 = forget 1000005 x126
+let x128 = forget 1000007 x127
+let x129 = forget 1000008 x128
+let x130 = forget 1000009 x129
+let x131 = forget 1000010 x130
+let x132 = forget 1000002 x123
+let x133 = forget 1000003 x132
+let x134 = forget 1000004 x133
+let x135 = forget 1000005 x134
+let x136 = forget 1000007 x135
+let x137 = forget 1000008 x136
+let x138 = forget 1000009 x137
+let x139 = forget 1000010 x138
+let x140 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x131
+let x141 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x139
+let x142 = join x140 x141
+let x143 = constrain 1000006 = { 3 } U+ 1000002 x142
+let x144 = constrain 1000011 = 1000004 x143
+let x145 = constrain 1000011 = 1000003 x144
+let x146 = forget 1000006 x145
+let x147 = forget 1000011 x146
+let x148 = constrain 1000006 = { } x142
+let x149 = forget 1000006 x148
+let x150 = forget 1000011 x149
+let x151 = constrain 1000006 = { 3 } U+ 1000002 x142
+let x152 = constrain 1000011 = 1000004 x151
+let x153 = constrain 1000011 = 1000003 x152
+let x154 = forget 1000006 x153
+let x155 = forget 1000011 x154
+let x156 = constrain 1000006 = { } x142
+let x157 = forget 1000006 x156
+let x158 = forget 1000011 x157
+let x159 = constrain 1000004 = 1000005 x147
+let x160 = constrain 8 in 1000004 x159
+let x161 = forget 1000004 x160
+let x162 = forget 1000004 x147
+let x163 = constrain 1000004 = 1000005 x147
+let x164 = constrain 8 in 1000004 x163
+let x165 = forget 1000004 x164
+let x166 = forget 1000004 x147
+let x167 = constrain 1000005 = 1000004 x161
+let x168 = constrain 10 in 1000005 x167
+let x169 = forget 1000005 x168
+let x170 = forget 1000005 x161
+let x171 = forget 7 x155
+sat x169 1000013 = 1000004
+sat x169 10 in 1000013
+sat x169 8 in 1000013
+sat x142 1000000 = 1000013
+sat x142 1000001 = 1000013
+sat x169 1000000 = 1000013
+sat x169 1000001 = 1000013
+let x172 = constrain 1000005 = 1000012 U+ 1000006 x142
+let x173 = constrain 1000007 = 1000001 x172
+let x174 = constrain 1000005 = 1000010 U+ 1000014 x173
+let x175 = constrain 1000007 = 1000008 x174
+let x176 = constrain 1000007 = 1000009 x175
+sat x176 1000013 = 1000011
+let x177 = forget 1000005 x176
+let x178 = forget 1000007 x177
+let x179 = constrain 1000005 = 1000012 U+ { 3 } U+ 1000002 x169
+let x180 = constrain 1000007 = 1000001 x179
+let x181 = constrain 1000005 = 1000010 U+ 1000014 x180
+let x182 = constrain 1000007 = 1000008 x181
+let x183 = constrain 1000007 = 1000009 x182
+sat x183 10 in 1000005
+sat x183 1000013 = 1000003
+let x184 = forget 1000005 x183
+let x185 = forget 1000007 x184
+let x186 = forget 1000002 x178
+let x187 = forget 1000003 x186
+let x188 = forget 1000004 x187
+let x189 = forget 1000006 x188
+let x190 = forget 1000011 x189
+let x191 = forget 1000012 x190
+let x192 = forget 1000013 x191
+let x193 = forget 1000002 x185
+let x194 = forget 1000003 x193
+let x195 = forget 1000004 x194
+let x196 = forget 1000006 x195
+let x197 = forget 1000011 x196
+let x198 = forget 1000012 x197
+let x199 = forget 1000013 x198
+let x200 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x192
+let x201 = forget 9 8 7 6 5 4 3 x199
+let x202 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 10 -> 3 ] x201
+let x203 = widening x200 x202
+sat x165 1000013 = 1000005
+sat x165 8 in 1000013
+sat x142 1000000 = 1000013
+sat x142 1000001 = 1000013
+sat x165 1000000 = 1000013
+sat x165 1000001 = 1000013
+let x204 = constrain 1000004 = 1000012 U+ 1000006 x142
+let x205 = constrain 1000007 = 1000001 x204
+let x206 = constrain 1000004 = 1000010 U+ 1000014 x205
+let x207 = constrain 1000007 = 1000008 x206
+let x208 = constrain 1000007 = 1000009 x207
+sat x208 1000013 = 1000011
+let x209 = forget 1000004 x208
+let x210 = forget 1000007 x209
+let x211 = constrain 1000004 = 1000012 U+ { 3 } U+ 1000002 x165
+let x212 = constrain 1000007 = 1000001 x211
+let x213 = constrain 1000004 = 1000010 U+ 1000014 x212
+let x214 = constrain 1000007 = 1000008 x213
+let x215 = constrain 1000007 = 1000009 x214
+sat x215 8 in 1000004
+sat x215 1000013 = 1000003
+let x216 = forget 1000004 x215
+let x217 = forget 1000007 x216
+let x218 = forget 1000002 x210
+let x219 = forget 1000003 x218
+let x220 = forget 1000005 x219
+let x221 = forget 1000006 x220
+let x222 = forget 1000011 x221
+let x223 = forget 1000012 x222
+let x224 = forget 1000013 x223
+let x225 = forget 1000002 x217
+let x226 = forget 1000003 x225
+let x227 = forget 1000005 x226
+let x228 = forget 1000006 x227
+let x229 = forget 1000011 x228
+let x230 = forget 1000012 x229
+let x231 = forget 1000013 x230
+let x232 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x224
+let x233 = forget 7 6 5 4 3 x231
+let x234 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 8 -> 3 ] x233
+let x235 = widening x232 x234
+sat x142 1000000 = 1000013
+sat x142 1000001 = 1000013
+sat x171 1000000 = 1000013
+sat x171 1000001 = 1000013
+let x236 = constrain 1000005 = 1000012 U+ 1000006 x142
+let x237 = constrain 1000007 = 1000001 x236
+let x238 = constrain 1000005 = 1000010 U+ 1000014 x237
+let x239 = constrain 1000007 = 1000008 x238
+let x240 = constrain 1000007 = 1000009 x239
+sat x240 1000013 = 1000011
+let x241 = forget 1000005 x240
+let x242 = forget 1000007 x241
+let x243 = constrain 1000005 = 1000012 U+ { 3 } U+ 1000002 x171
+let x244 = constrain 1000007 = 1000001 x243
+let x245 = constrain 1000005 = 1000010 U+ 1000014 x244
+let x246 = constrain 1000007 = 1000008 x245
+let x247 = constrain 1000007 = 1000009 x246
+sat x247 1000013 = 1000003
+sat x247 1000003 = 1000004
+let x248 = forget 1000005 x247
+let x249 = forget 1000007 x248
+let x250 = forget 1000002 x242
+let x251 = forget 1000003 x250
+let x252 = forget 1000004 x251
+let x253 = forget 1000006 x252
+let x254 = forget 1000011 x253
+let x255 = forget 1000012 x254
+let x256 = forget 1000013 x255
+let x257 = forget 1000002 x249
+let x258 = forget 1000003 x257
+let x259 = forget 1000004 x258
+let x260 = forget 1000006 x259
+let x261 = forget 1000011 x260
+let x262 = forget 1000012 x261
+let x263 = forget 1000013 x262
+let x264 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x256
+let x265 = forget 6 5 4 3 x263
+let x266 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 7 -> 3 ] x265
+let x267 = widening x264 x266
+sat x203 1000000 = 1000014
+sat x203 1000001 = 1000014
+sat x203 1000000 = 1000009
+sat x203 1000001 = 1000009
+sat x203 1000000 = 1000010
+sat x203 1000001 = 1000010
+sat x203 1000000 = 1000008
+sat x203 1000001 = 1000008
+sat x235 1000000 = 1000014
+sat x235 1000001 = 1000014
+sat x235 1000000 = 1000009
+sat x235 1000001 = 1000009
+sat x235 1000000 = 1000010
+sat x235 1000001 = 1000010
+sat x235 1000000 = 1000008
+sat x235 1000001 = 1000008
+let x268 = constrain 1000002 = 1000014 x203
+let x269 = constrain 1000003 = 1000009 x268
+let x270 = constrain 1000004 = 1000010 x269
+let x271 = constrain 1000005 = 1000001 x270
+let x272 = constrain 1000002 = 1000014 x235
+let x273 = constrain 1000003 = 1000009 x272
+let x274 = constrain 1000004 = 1000010 x273
+let x275 = constrain 1000005 = 1000001 x274
+let x276 = forget 1000008 x271
+let x277 = forget 1000009 x276
+let x278 = forget 1000010 x277
+let x279 = forget 1000014 x278
+let x280 = forget 1000008 x275
+let x281 = forget 1000009 x280
+let x282 = forget 1000010 x281
+let x283 = forget 1000014 x282
+let x284 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x279
+let x285 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x283
+let x286 = join x284 x285
+sat x286 1000000 = 1000002
+sat x286 1000001 = 1000002
+sat x286 1000000 = 1000003
+sat x286 1000001 = 1000003
+sat x286 1000000 = 1000004
+sat x286 1000001 = 1000004
+sat x286 1000000 = 1000005
+sat x286 1000001 = 1000005
+sat x267 1000000 = 1000014
+sat x267 1000001 = 1000014
+sat x267 1000000 = 1000009
+sat x267 1000001 = 1000009
+sat x267 1000000 = 1000010
+sat x267 1000001 = 1000010
+sat x267 1000000 = 1000008
+sat x267 1000001 = 1000008
+let x287 = constrain 1000006 = 1000002 x286
+let x288 = constrain 1000007 = 1000003 x287
+let x289 = constrain 1000011 = 1000004 x288
+let x290 = constrain 1000012 = 1000001 x289
+let x291 = constrain 1000006 = 1000014 x267
+let x292 = constrain 1000007 = 1000009 x291
+let x293 = constrain 1000011 = 1000010 x292
+let x294 = constrain 1000012 = 1000001 x293
+let x295 = forget 1000002 x290
+let x296 = forget 1000003 x295
+let x297 = forget 1000004 x296
+let x298 = forget 1000005 x297
+let x299 = forget 1000008 x298
+let x300 = forget 1000009 x299
+let x301 = forget 1000010 x300
+let x302 = forget 1000014 x301
+let x303 = forget 1000002 x294
+let x304 = forget 1000003 x303
+let x305 = forget 1000004 x304
+let x306 = forget 1000005 x305
+let x307 = forget 1000008 x306
+let x308 = forget 1000009 x307
+let x309 = forget 1000010 x308
+let x310 = forget 1000014 x309
+let x311 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x302
+let x312 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x310
+let x313 = join x311 x312
+let x314 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3; 1000000 -> 1000000; 1000001 -> 1000001; 1000006 -> 1000006; 1000007 -> 1000011; 1000011 -> 1000012; 1000012 -> 1000013 ] x313
+le x314 x142
+sat x313 1000000 = 1000011 U+ 1000006
+sat x313 1000001 = 1000012
+sat x313 1000001 = 1000007
+let x315 = forget 1000011 x313
+let x316 = forget 1000012 x315
+let x317 = forget 0 1 x316
+let x318 = forget 1000006 x317
+let x319 = forget 1000007 x318
+let x320 = forget 2 3 x319
+let x321 = forget 1000001 x320
+let x322 = forget 1000000 x321

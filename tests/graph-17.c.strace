@@ -1,0 +1,93 @@
+let x0 = bottom
+let x1 = top
+let x2 = constrain 1000001 <= 1000000 x1
+let x3 = forget 3 x2
+let x4 = constrain 1000000 = { 1 } U+ 1000002 x3
+let x5 = constrain 1000001 = 1000004 x4
+let x6 = constrain 1000001 = 1000003 x5
+let x7 = constrain 1000000 = { } x3
+let x8 = forget 6 x6
+let x9 = constrain 1000004 = 1000005 x8
+let x10 = constrain 10 in 1000004 x9
+let x11 = forget 1000004 x10
+let x12 = forget 1000004 x8
+sat x11 10 in { 1 } U+ 1000002 U+ { }
+let x13 = constrain 1000007 = 1000003 x11
+let x14 = constrain 1000008 = 1000003 x13
+let x15 = constrain 1000002 = 1000004 U+ 1000006 x14
+let x16 = constrain 10 in 1000002 x15
+let x17 = forget 1000002 x16
+let x18 = forget 1000003 x17
+let x19 = constrain 1000006 = { 10 } U+ 1000009 x18
+let x20 = constrain 1000008 = 1000011 x19
+let x21 = constrain 1000008 = 1000010 x20
+let x22 = forget 1000006 x21
+let x23 = forget 1000008 x22
+let x24 = constrain 1000006 = { } x18
+let x25 = forget 1000006 x24
+let x26 = forget 1000008 x25
+let x27 = forget 14 x23
+let x28 = forget 11 x11
+let x29 = forget 5 x27
+let x30 = forget 5 x28
+let x31 = forget 3 x29
+let x32 = forget 3 x30
+let x33 = forget 3 x11
+let x34 = forget 3 x8
+sat x31 1000007 = 1000005
+sat x31 10 in 1000007
+sat x31 1000001 = 1000007
+sat x31 1000001 = 1000007
+sat x32 1000003 = 1000005
+sat x32 10 in 1000003
+sat x32 1000000 = { 1 } U+ 1000002
+sat x32 1000001 = 1000003
+sat x32 1000001 = 1000003
+sat x33 1000003 = 1000005
+sat x33 10 in 1000003
+sat x33 1000000 = { 1 } U+ 1000002
+sat x33 1000001 = 1000003
+sat x33 1000001 = 1000003
+sat x34 1000000 = { 1 } U+ 1000002
+sat x34 1000001 = 1000004
+sat x34 1000001 = 1000003
+let x35 = forget 1000004 x31
+let x36 = forget 1000005 x35
+let x37 = forget 1000007 x36
+let x38 = forget 0 1 6 7 8 9 x37
+let x39 = forget 1000002 x32
+let x40 = forget 1000003 x39
+let x41 = forget 1000005 x40
+let x42 = forget 0 1 6 7 8 9 x41
+let x43 = forget 1000002 x33
+let x44 = forget 1000003 x43
+let x45 = forget 1000005 x44
+let x46 = forget 0 1 6 7 8 9 x45
+let x47 = forget 0 x34
+let x48 = forget 0 x3
+let x49 = forget 1000009 x38
+let x50 = forget 1000010 x49
+let x51 = forget 1000011 x50
+let x52 = forget 2 10 11 12 13 x51
+let x53 = forget 2 10 x42
+let x54 = forget 2 10 x46
+let x55 = forget 1000002 x47
+let x56 = forget 1000003 x55
+let x57 = forget 1000004 x56
+let x58 = forget 1 2 7 8 9 x57
+let x59 = forget 1 2 x48
+let x60 = forget 4 14 x52
+let x61 = forget 4 11 x53
+let x62 = forget 4 5 x54
+let x63 = forget 4 5 x58
+let x64 = forget 4 5 x59
+let x65 = forget 1000001 x60
+let x66 = forget 1000001 x61
+let x67 = forget 1000001 x62
+let x68 = forget 1000001 x63
+let x69 = forget 1000001 x64
+let x70 = forget 1000000 x65
+let x71 = forget 1000000 x66
+let x72 = forget 1000000 x67
+let x73 = forget 1000000 x68
+let x74 = forget 1000000 x69

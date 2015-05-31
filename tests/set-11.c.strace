@@ -1,0 +1,51 @@
+let x0 = bottom
+let x1 = top
+let x2 = constrain { } = 1000001 x1
+let x3 = forget 3 x2
+let x4 = constrain 1000000 = { 1 } U+ 1000002 x3
+let x5 = constrain 1000000 = { } x3
+sat x4 1000000 = 1000002
+sat x4 1000001 = 1000002
+let x6 = constrain 1000003 = 1000000 x3
+let x7 = constrain 1000004 = { } x6
+let x8 = constrain 1000003 = 1000002 x4
+let x9 = constrain 1000004 = { 1 } x8
+let x10 = forget 1000002 x7
+let x11 = forget 1000002 x9
+let x12 = rename [ 0 -> 0; 1 -> 1; 2 -> 2 ] x10
+let x13 = forget 4 x11
+let x14 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x13
+let x15 = widening x12 x14
+let x16 = constrain 1000003 = { 3 } U+ 1000002 x15
+let x17 = forget 1000003 x16
+let x18 = constrain 1000003 = { } x15
+let x19 = forget 1000003 x18
+sat x15 1000000 = 1000003
+sat x15 1000001 = 1000003
+sat x15 1000000 = 1000004
+sat x15 1000001 = 1000004
+sat x17 1000000 = 1000002
+sat x17 1000001 = 1000002
+let x20 = constrain 1000005 = 1000003 x15
+let x21 = constrain 1000006 = 1000004 x20
+let x22 = constrain 1000005 = 1000002 x17
+let x23 = constrain 1000006 = { 3 } U+ 1000004 x22
+let x24 = forget 1000002 x21
+let x25 = forget 1000003 x24
+let x26 = forget 1000004 x25
+let x27 = forget 1000002 x23
+let x28 = forget 1000003 x27
+let x29 = forget 1000004 x28
+let x30 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3 ] x26
+let x31 = forget 5 3 x29
+let x32 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 4 -> 3 ] x31
+let x33 = widening x30 x32
+let x34 = rename [ 0 -> 0; 1 -> 1; 2 -> 2; 3 -> 3; 1000000 -> 1000000; 1000001 -> 1000001; 1000005 -> 1000003; 1000006 -> 1000004 ] x33
+le x34 x15
+sat x33 1000000 = 1000006 U+ 1000005
+let x35 = forget 1000006 x33
+let x36 = forget 0 1 x35
+let x37 = forget 1000005 x36
+let x38 = forget 2 3 x37
+let x39 = forget 1000001 x38
+let x40 = forget 1000000 x39

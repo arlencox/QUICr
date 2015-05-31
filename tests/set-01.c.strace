@@ -1,0 +1,10 @@
+let x0 = bottom
+let x1 = top
+let x2 = constrain 1000000 <= 1000001 x1
+let x3 = constrain 1 in 1000000 x2
+sat x3 1 in 1000001
+let x4 = forget 2 x3
+let x5 = forget 1 x4
+let x6 = forget 0 2 x5
+let x7 = forget 1000001 x6
+let x8 = forget 1000000 x7
