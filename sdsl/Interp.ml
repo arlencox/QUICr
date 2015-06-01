@@ -65,12 +65,15 @@ let state_brace = ref false
 
 let opt_time = ref false
 
+let opt_eval = ref false
+
 let args = [
   "-final", Arg.Set print_final, " Print the final abstract state";
   "-step",  Arg.Set print_step,  " Print each step of the interpretation and final state";
   "-color", Arg.String (fun s -> color_inv := Color.of_string s), "<color> Set color of abstract states";
   "-brace", Arg.Set state_brace, " Show braces for abstract states";
   "-time", Arg.Set opt_time, " Report analysis time";
+  "-eval", Arg.Set opt_eval, " Report pass/fail for each assertion";
 ]
 
 module Make(D: Interface.Domain
@@ -299,13 +302,15 @@ let print_state_raw pp_sym state =
         let state = D.constrain c state in
         if !print_step then print_state renv state;
         state
-      | Assert c ->
+      | Assert (id, c) ->
         if !print_step then Format.printf "@,assert(%a)" (L.pp Format.pp_print_string) c;
         let c = L.map_symbol get_or_fresh c in
-        let state = if D.sat state c then
+        let state = if D.sat state c then begin
+            if !opt_eval then Format.printf "(%d) : PASS@." id;
             state
-          else begin
-            Format.printf "Warning: Could not prove assertion@.";
+          end else begin
+            if !opt_eval then Format.printf "(%d) : FAIL@." id
+            else Format.printf "Warning: Could not prove assertion@.";
             D.constrain c state
           end in
         if !print_step then print_state renv state;

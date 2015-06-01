@@ -42,7 +42,8 @@ def main():
     configs = [ config for config in configs if config[0] != "#" ]
 
     tests = next(os.walk("tests"))[2]
-    tests = [ test for test in tests if test.endswith(".sdsl") or test.endswith(".strace") ]
+    #tests = [ test for test in tests if test.endswith(".sdsl") or test.endswith(".strace") ]
+    tests = [ test for test in tests if test.endswith(".strace") ]
 
     table = {}
     configt = {}

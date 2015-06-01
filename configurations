@@ -5,3 +5,4 @@
 -bdd-full -pack -eq -sing
 -qbf depqbf -sing
 -lin
+-lin -eq

@@ -57,6 +57,14 @@ let mkwhile c b =
             AST.Assume c,
             b)),
         AST.Assume(L.Not c))
+
+let counter = ref 0
+
+let fresh () =
+  let res = !counter in
+  incr counter;
+  res
+
 %}
 
 
@@ -102,7 +110,7 @@ statement
         | None -> L.False
         | Some c -> c
       in
-      AST.Assert c
+      AST.Assert (fresh (), c)
     }
   | ASSUME LPAREN cond RPAREN {
       let c = match $3 with
