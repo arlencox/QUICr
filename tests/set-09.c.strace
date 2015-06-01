@@ -1,0 +1,33 @@
+let x0 = bottom
+let x1 = top
+let x2 = forget 4 x1
+let x3 = forget 3 x2
+let x4 = constrain 1000000 = 1000001 x3
+let x5 = constrain 1 in 1000000 x4
+let x6 = constrain 1000000 = 1000001 x3
+let x7 = constrain 1 in 1000000 x6
+let x8 = constrain 1000001 = 1000002 x5
+let x9 = constrain 3 in 1000001 x8
+let x10 = forget 1000001 x9
+let x11 = forget 1000001 x5
+let x12 = forget 4 x10
+let x13 = forget 4 x7
+let x14 = forget 4 x3
+sat x12 3 in 1000002
+sat x12 1000000 = 1000002
+sat x12 1 in 1000000
+sat x13 1000000 = 1000001
+sat x13 1 in 1000000
+sat x12 1000002 = 1000000
+sat x13 1000001 = 1000000
+let x15 = forget 0 1 3 5 7 x12
+let x16 = forget 0 1 5 x13
+let x17 = forget 0 x14
+let x18 = forget 1000002 x15
+let x19 = forget 2 6 x18
+let x20 = forget 1000001 x16
+let x21 = forget 2 3 x20
+let x22 = forget 1 2 x17
+let x23 = forget 1000000 x19
+let x24 = forget 1000000 x21
+let x25 = forget 1000000 x22

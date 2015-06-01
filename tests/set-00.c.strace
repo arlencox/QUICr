@@ -1,0 +1,7 @@
+let x0 = bottom
+let x1 = top
+let x2 = forget 2 x1
+let x3 = forget 1 x2
+let x4 = forget 0 2 x3
+let x5 = forget 1000001 x4
+let x6 = forget 1000000 x5

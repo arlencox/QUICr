@@ -1,0 +1,18 @@
+let x0 = bottom
+let x1 = top
+let x2 = constrain 1000001 <= 1000000 x1
+let x3 = forget 3 5 6 x2
+let x4 = forget 6 x3
+let x5 = forget 3 7 x4
+let x6 = forget 3 x5
+let x7 = forget 5 x6
+let x8 = forget 5 x7
+let x9 = constrain 1000002 = { 4 } U+ 1000000 x8
+sat x9 1000002 = { 4 } U+ 1000000
+sat x9 1000001 = 1000001
+sat x9 1000001 = 1000001
+let x10 = forget 0 1 3 4 6 x9
+let x11 = forget 2 5 x10
+let x12 = forget 1000002 x11
+let x13 = forget 1000001 x12
+let x14 = forget 1000000 x13
