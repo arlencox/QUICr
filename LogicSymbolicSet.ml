@@ -38,12 +38,36 @@ let prec_e = function
 let rec pp_noparen_e ?parse:(parse=false) pp_sym ff t =
   let pprec = pp_e ~prec:(prec_e t) pp_sym in
   match t with
-  | Empty -> Format.fprintf ff "∅"
-  | Universe -> Format.fprintf ff "𝕌"
-  | DisjUnion (a,b) -> Format.fprintf ff "%a ⊎ %a" pprec a pprec b
-  | Union (a,b) -> Format.fprintf ff "%a ∪ %a" pprec a pprec b
-  | Inter (a,b) -> Format.fprintf ff "%a ∩ %a" pprec a pprec b
-  | Diff (a,b) -> Format.fprintf ff "%a ∖ %a" pprec a pprec b
+  | Empty ->
+    if parse then
+      Format.fprintf ff "{}"
+    else
+      Format.fprintf ff "∅"
+  | Universe ->
+    if parse then
+      Format.fprintf ff "~{}"
+    else
+      Format.fprintf ff "𝕌"
+  | DisjUnion (a,b) ->
+    if parse then
+      Format.fprintf ff "%a U+ %a" pprec a pprec b
+    else
+      Format.fprintf ff "%a ⊎ %a" pprec a pprec b
+  | Union (a,b) ->
+    if parse then
+      Format.fprintf ff "%a U %a" pprec a pprec b
+    else
+      Format.fprintf ff "%a ∪ %a" pprec a pprec b
+  | Inter (a,b) ->
+    if parse then
+      Format.fprintf ff "%a ^ %a" pprec a pprec b
+    else
+      Format.fprintf ff "%a ∩ %a" pprec a pprec b
+  | Diff (a,b) ->
+    if parse then
+      Format.fprintf ff "%a \\ %a" pprec a pprec b
+    else
+      Format.fprintf ff "%a ∖ %a" pprec a pprec b
   | Comp a -> Format.fprintf ff "~%a" pprec a
   | Var v -> pp_sym ff v
   | Sing v -> Format.fprintf ff "{%a}" pp_sym v

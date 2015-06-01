@@ -192,11 +192,11 @@ module Make(S: Solver) : Interface.Domain
   let rename_symbols rename t =
     {t with e = rename_symbols t.ctx (Hashtbl.create 8191) rename F.ISet.empty t.e }
 
-  let rename_symbols rename t =
+  (*let rename_symbols rename t =
     let h = t.ctx in
     {t with e = Rename.fold (fun a b e ->
          F.mexists h a (F.mand h (F.meq h (F.mvar h a) (F.mvar h b)) e)
-       ) rename t.e}
+       ) rename t.e}*)
 
   let query t =
     {
