@@ -2,7 +2,7 @@ library(plyr)
 options(width=200)
 
 # read in the data file
-t <- read.csv("results_sdsl.csv", header=TRUE, colClasses=c("factor", "factor", "character", "factor", "factor", "character", "factor", "character", "character"))
+t <- read.csv("data/results_sdsl.csv", header=TRUE, colClasses=c("factor", "factor", "character", "factor", "factor", "character", "factor", "character", "character"))
 # fix the dates
 t$Date <- as.POSIXct(gsub("T", " ", t$Date), tz="GMT")
 # fix the Pass and Total columns
@@ -29,7 +29,7 @@ result <- ddply(.data=run_time, c("Config"), summarise, Time = sum(Time), Pass =
 print.data.frame(result)
 
 # read in the second data file
-t <- read.csv("results_strace.csv", header=TRUE, colClasses=c("factor", "factor", "character", "factor", "factor", "character", "factor", rep("character", 4 * 2)))
+t <- read.csv("data/results_strace.csv", header=TRUE, colClasses=c("factor", "factor", "character", "factor", "factor", "character", "factor", rep("character", 4 * 2)))
 # fix the dates
 t$Date <- as.POSIXct(gsub("T", " ", t$Date), tz="GMT")
 # fix the Pass and Total columns
