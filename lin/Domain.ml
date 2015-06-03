@@ -865,5 +865,5 @@ let query (x: t): query =
   { L.get_eqs     = (fun ( ) -> [ ]);
     L.get_eqs_sym = (fun _ -> [ ]); }
 let combine (q: query) (x: t) =
-  Printf.printf "WARN: combine will return default, imprecise result\n";
-  x
+  List.fold_left (fun x (s0, s1) -> constrain (L.Eq (L.Var s0, L.Var s1)) x)
+    x (q.L.get_eqs ( ))
