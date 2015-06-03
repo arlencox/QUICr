@@ -95,12 +95,22 @@ let gen_set_2str (c: string) (f: int -> string) (s: IntSet.t): string =
   str
 let set_setv_2str = gen_set_2str ", " (Printf.sprintf "S[%d]")
 let set_sv_2str = gen_set_2str ", " (Printf.sprintf "N[%d]")
+let pp_set_syms (c: string) (pp_sym: Format.formatter -> int -> unit)
+    (ch: Format.formatter) (s: IntSet.t): unit =
+  let _ =
+    IntSet.fold
+      (fun i b ->
+        Format.fprintf ch "%s%a" (if b then "" else c) pp_sym i;
+        false
+      ) s true in
+  ( )
 
 
 
 (** Module abbrevs *)
 
 module L = LogicSymbolicSet
+module R = Rename
 
 
 (** Abstract values *)
@@ -129,10 +139,11 @@ type u =
 type t = u option (* None if _|_, Some u if non bot constraints u *)
 
 (* A straightforward lift operation *)
+exception Bottom (* short-circuit computation when a bottom is found *)
 let lift (f: u -> u) (x: t): t =
   match x with
   | None -> x
-  | Some u -> Some (f u)
+  | Some u -> try Some (f u) with Bottom -> None
 
 
 (** Abstract domain interface types, and "initialization" *)
@@ -202,13 +213,14 @@ let sl_one_set (i: int) = { sl_empty with sl_sets = IntSet.singleton i }
 let sl_one_elt (i: int) = { sl_empty with sl_elts = IntSet.singleton i }
 
 (* Conversion to string *)
-let sl_2str (sl: set_lin): string =
-  let lin_setv_2str = gen_set_2str " + " (Printf.sprintf "S[%d]") in
+let pp_sl
+    (pp_sym: Format.formatter -> sym -> unit)
+    (ch: Format.formatter) (sl: set_lin): unit =
   if sl.sl_elts = IntSet.empty && sl.sl_sets = IntSet.empty then
-    Printf.sprintf " = empty"
+    Format.fprintf ch "empty"
   else
-    Printf.sprintf " = { %s } + %s" (set_sv_2str sl.sl_elts)
-      (lin_setv_2str sl.sl_sets)
+    Format.fprintf ch "{ %a } + %a" (pp_set_syms ", " pp_sym) sl.sl_elts
+      (pp_set_syms " + " pp_sym) sl.sl_sets
 
 (* Equality of set constraints *)
 let sl_eq c sl =
@@ -249,33 +261,35 @@ let linearize (ex: int L.e): set_lin option =
 (* Internal and abstract state representations are fairly close
  * for this domain, hence we make just one pretty-printing function *)
 let pp
-    (_: Format.formatter -> sym -> unit) (* sym is int... *)
+    (pp_sym: Format.formatter -> sym -> unit) (* sym is int... *)
     (ch: Format.formatter) (x: t): unit =
   match x with
   | None -> Format.fprintf ch "BOT\n"
   | Some u ->
-      IntMap.iter (fun i c -> Format.fprintf ch "S[%d] = %s@\n" i (sl_2str c))
+      IntMap.iter
+        (fun i c -> Format.fprintf ch "%a = %a@\n" pp_sym i (pp_sl pp_sym) c)
         u.u_lin;
       IntMap.iter
         (fun i s ->
           if s != IntSet.empty && i <= IntSet.min_elt s then
             let s = IntSet.remove i s in
             let plur = if IntSet.cardinal s > 1 then "s" else "" in
-            Format.fprintf ch "S[%d] equal to set%s %s@\n" i plur
-              (set_setv_2str s)
+            Format.fprintf ch "%a equal to set%s %a@\n" pp_sym i plur
+              (pp_set_syms ", " pp_sym) s
         ) u.u_eqs;
       IntMap.iter
         (fun i s ->
           let plur = if IntSet.cardinal s > 1 then "s" else "" in
-          Format.fprintf ch "S[%d] contains set%s: %s\n" i plur
-            (set_setv_2str s)
+          Format.fprintf ch "%a contains set%s: %a@\n" pp_sym i plur
+            (pp_set_syms ", " pp_sym) s
         ) u.u_sub;
       IntMap.iter
         (fun i s ->
           let plur = if IntSet.cardinal s > 1 then "s" else "" in
-          Format.fprintf ch "S[%d] contains element%s: %s\n" i plur
-            (set_sv_2str s)
+          Format.fprintf ch "%a contains element%s: %a@\n" pp_sym i plur
+            (pp_set_syms ", " pp_sym) s
         ) u.u_mem
+
 let pp_debug = pp
 let pp_print = pp
 let pp_sym ch i = Format.fprintf ch "%d" i
@@ -321,6 +335,8 @@ let constrain (c: cnstr): t -> t =
      *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
      *  constraints should just not arise here! *)
     match c with
+    | L.True -> u
+    | L.False -> raise Bottom
     | L.In (i, L.Var j) ->
         u_add_mem u i j
     | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
@@ -351,11 +367,6 @@ let constrain (c: cnstr): t -> t =
               u
         end
     | L.SubEq (L.Var i, L.Var j) ->
-        (* TODO: there seem to be a bug in the inclusion order,
-         *   that is, constraints seem to appear in the reverse
-         *   order than they should *)
-        (*if debug_module then
-          Printf.printf "inclusion: %d <= %d\n" i j;*)
         u_add_inclusion u i j
     | _ ->
         (* otherwise, we just drop the constraint *)
@@ -470,6 +481,8 @@ let sat (x: t) (c: cnstr): bool =
   | Some u ->
       (* trying to support the same constraints as in guard *)
       match c with
+      | L.True -> true
+      | L.False -> false
       | L.In (i, ex) -> u_sat_mem_ex u i ex
       | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
       | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
@@ -663,11 +676,11 @@ let forget (l: sym list): t -> t =
 (* Renaming *)
 (* Nb: this function is a lot simpler than the MemCAD one, since it does not
  *     also have to manage duplication and removal of symbols *)
-let rename_symbols (r: sym Rename.t): t -> t =
+let rename_symbols (r: sym R.t): t -> t =
   let u_rename (u: u): u =
     let do_sym (i: int): int =
-      try Rename.get r i
-    with Not_found -> failwith "rename_symbols: do_sv fails" in
+      try R.get r i
+      with Not_found -> failwith "rename_symbols: do_sv fails" in
     let do_sym_set (s: IntSet.t): IntSet.t =
       IntSet.fold (fun i acc -> IntSet.add (do_sym i) acc) s IntSet.empty in
     let do_sym_set_map (ms: IntSet.t IntMap.t): IntSet.t IntMap.t =
