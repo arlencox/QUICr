@@ -18,8 +18,6 @@
  * The integration of this module here is a bit work in progress, so I leave
  * some cleaning tasks for later:
  *  - moving the libraries into utility files
- *  - now type t has a single field; remove struct
- *  - add Format printers in the maps
  *  - move stuffs specific to set_lin in a separate module
  *  - do reduction on a SET of symbols about to be removed, and not just one
  * 
@@ -28,7 +26,6 @@
  *  - meet
  *  - serialize
  *  - query
- *  - combine
  *)
 
 (** Maps and Sets with printers *)
