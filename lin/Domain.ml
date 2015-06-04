@@ -25,7 +25,6 @@
  * should be improved:
  *  - meet
  *  - serialize
- *  - query
  *)
 
 (** Maps and Sets with printers *)
@@ -856,11 +855,22 @@ let le (x0: t) (x1: t): bool =
 
 (** Interface for reduction *)
 
-(* For now, this domain still offers no facility for reduction *)
+(* For now, the reduction primitives simply export equalities;
+ * but do not try to do additional internal reduction, to generate
+ * more equalities (we may do it later). *)
 let query (x: t): query =
-  Printf.printf "WARN: query will return default, imprecise result\n";
-  { L.get_eqs     = (fun ( ) -> [ ]);
-    L.get_eqs_sym = (fun _ -> [ ]); }
+  match x with
+  | None ->
+      { L.get_eqs     = (fun ( ) -> [ ]);
+        L.get_eqs_sym = (fun _ -> [ ]); }
+  | Some u ->
+      let f i = IntSet.fold (fun j a -> (i, j) :: a) in
+      let eqs () = IntMap.fold f u.u_eqs [ ] in
+      let eqs_of i =
+        try IntSet.fold (fun j a -> j :: a) (IntMap.find i u.u_eqs) [ ]
+        with Not_found -> [ ] in
+      { L.get_eqs     = eqs;
+        L.get_eqs_sym = eqs_of; }
 let combine (q: query) (x: t) =
   List.fold_left (fun x (s0, s1) -> constrain (L.Eq (L.Var s0, L.Var s1)) x)
     x (q.L.get_eqs ( ))
