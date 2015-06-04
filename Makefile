@@ -5,13 +5,15 @@ TARGETS=$(patsubst %.mlpack,%.cma,$(PACKS)) $(patsubst %.mlpack,%.cmxa,$(PACKS))
 
 FLAGS=-cflag -short-paths
 
-all:
+all: Main.ml
 	ocamlbuild -use-ocamlfind $(FLAGS) $(TARGETS) Main.d.byte Main.native
 
-Main.native: all
+Main.ml : Main.ml.in
+	./configure
 
 clean:
-	ocamlbuild -clean
+	ocamlbuild -clean;
+	rm Main.ml
 
 BENCHMARKS.md : Main.native $(wildcard tests/*.strace) $(wildcard tests/*.sdsl)
 	python scripts/results > BENCHMARKS.md

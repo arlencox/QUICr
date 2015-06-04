@@ -1,2 +1,3 @@
 PKG mlbdd
+PKG Z3
 B _build
