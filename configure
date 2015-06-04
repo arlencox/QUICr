@@ -71,7 +71,7 @@ check_Z3()
 {
   check_pkg "Z3" "4.4.0.0"
   if [ $? -eq 0 ]; then
-    options="-D Z3 $options"
+    options="-D PKG_Z3 $options"
   fi
 }
 
@@ -79,10 +79,11 @@ check_mlbdd()
 {
   check_pkg "mlbdd" "0.1"
   if [ $? -eq 0 ]; then
-    options="-D MLBDD $options"
+    options="-D PKG_MLBDD $options"
   fi
 }
 
 check_Z3
 check_mlbdd
-cppo $options Main.ml.in > Main.ml
+cppo $options Main.ml.in -o Main.ml
+cppo $options -n _tags.in -o _tags

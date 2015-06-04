@@ -15,6 +15,10 @@
 <tracer/*>: for-pack(Tracer)
 <debugger/*>: for-pack(Debugger)
 <Main.*>: package(str)
-<*> or <bdd-full/*>: package(mlbdd)
-<Main.*> or <SMT.*> or <smt/*>: package(Z3)
 <*> or <stats/*>: package(unix)
+#ifdef PKG_MLBDD
+<*> or <bdd-full/*>: package(mlbdd)
+#endif
+#ifdef PKG_Z3
+<Main.*> or <SMT.*> or <smt/*>: package(Z3)
+#endif

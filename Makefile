@@ -11,6 +11,7 @@ Main.ml : Main.ml.in
 clean:
 	ocamlbuild -clean;
 	rm Main.ml
+	rm _tags
 
 BENCHMARKS.md : Main.native $(wildcard tests/*.strace) $(wildcard tests/*.sdsl)
 	python scripts/results > BENCHMARKS.md

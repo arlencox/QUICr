@@ -2,3 +2,4 @@ _build
 Main.d.byte
 Main.native
 Main.ml
+_tags

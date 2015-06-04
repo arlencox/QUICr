@@ -22,16 +22,16 @@ let arg_blank = ("", Arg.Unit (fun () -> ()), " ")
 
 (** list of abstract domains to enable *)
 let domains = [
-#ifdef MLBDD
+#ifdef PKG_MLBDD
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
 
   ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
 #endif
   ("-lin", Arg.Unit (fun () -> push (module Lin.Domain)), " Lin set domain");
-#ifdef Z3
+#ifdef PKG_Z3
   ("-smt", Arg.Unit (fun () -> push (module SMT.Domain)), " SMT-based set domain");
 #endif
-#ifdef QBF
+#ifdef PKG_QBF
   ("-qbf", Arg.String (fun solver ->
       let s = match solver with
         | _ -> (module QBF.SolverDepQBF : QBF.Domain.Solver)
