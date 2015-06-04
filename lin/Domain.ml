@@ -24,7 +24,6 @@
  * The functions below still have a very rudimentary implementation, that
  * should be improved:
  *  - meet
- *  - serialize
  *)
 
 (** Maps and Sets with printers *)
@@ -490,9 +489,31 @@ let sat (x: t) (c: cnstr): bool =
           end
       | _ -> false
 
-let serialize (x: t): output =
-  Printf.printf "WARN: serialize will return default, imprecise result\n";
-  L.True
+let serialize: t -> output = function
+  | None -> L.False
+  | Some u ->
+      let add c = function
+        | L.True -> c
+        | o -> L.And (c, o) in
+      let aux f m o =
+        IntMap.fold (fun i -> IntSet.fold (fun j -> add (f i j))) m o in
+      let make_set f s =
+        let _, e =
+          IntSet.fold
+            (fun i (b, e) ->
+              if b then false, f i
+              else false, L.DisjUnion (f i, e)
+            ) s (true, L.Empty) in
+        e in
+      let o = aux (fun i j -> L.Eq (L.Var i, L.Var j)) u.u_eqs L.True in
+      let o = aux (fun i j -> L.In (j, L.Var i)) u.u_mem o in
+      let o = aux (fun i j -> L.SubEq (L.Var j, L.Var i)) u.u_sub o in
+      IntMap.fold
+        (fun i l ->
+          let elts = make_set (fun i -> L.Sing i) l.sl_elts in
+          let sets = make_set (fun i -> L.Var i) l.sl_sets in
+          add (L.Eq (L.Var i, L.DisjUnion (elts, sets)))
+        ) u.u_lin o
 
 
 (** Reduction *)
