@@ -1,12 +1,9 @@
 .PHONY: all clean benchmark
 
-PACKS=$(wildcard *.mlpack)
-TARGETS=$(patsubst %.mlpack,%.cma,$(PACKS)) $(patsubst %.mlpack,%.cmxa,$(PACKS))
-
 FLAGS=-cflag -short-paths
 
 all: Main.ml
-	ocamlbuild -use-ocamlfind $(FLAGS) $(TARGETS) Main.d.byte Main.native
+	ocamlbuild -use-ocamlfind $(FLAGS) Main.d.byte Main.native
 
 Main.ml : Main.ml.in
 	./configure
