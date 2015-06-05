@@ -32,26 +32,38 @@ module Color = struct
     ^ "m"
 
   let of_string c =
-    let (bright, c) = match String.lowercase c with
-      | "black" ->    (false, Black)
-      | "black!" ->   (true,  Black)
-      | "red" ->      (false, Red)
-      | "red!" ->     (true,  Red)
-      | "green" ->    (false, Green)
-      | "green!" ->   (true,  Green)
-      | "yellow" ->   (false, Yellow)
-      | "yellow!" ->  (true,  Yellow)
-      | "blue" ->     (false, Blue)
-      | "blue!" ->    (true,  Blue)
-      | "magenta" ->  (false, Magenta)
-      | "magenta!" -> (true,  Magenta)
-      | "cyan" ->     (false, Cyan)
-      | "cyan!" ->    (true,  Cyan)
-      | "white" ->    (false, White)
-      | "white!" ->   (true,  White)
-      | _ ->          (true,  Cyan)
-    in
-    color bright c
+    if c = "none" then
+      None
+    else
+      let (bright, c) = match String.lowercase c with
+        | "black" ->    (false, Black)
+        | "black!" ->   (true,  Black)
+        | "red" ->      (false, Red)
+        | "red!" ->     (true,  Red)
+        | "green" ->    (false, Green)
+        | "green!" ->   (true,  Green)
+        | "yellow" ->   (false, Yellow)
+        | "yellow!" ->  (true,  Yellow)
+        | "blue" ->     (false, Blue)
+        | "blue!" ->    (true,  Blue)
+        | "magenta" ->  (false, Magenta)
+        | "magenta!" -> (true,  Magenta)
+        | "cyan" ->     (false, Cyan)
+        | "cyan!" ->    (true,  Cyan)
+        | "white" ->    (false, White)
+        | "white!" ->   (true,  White)
+        | _ ->          (true,  Cyan)
+      in
+      Some (color bright c)
+
+  let print c pp ff a =
+    match c with
+    | None ->
+      pp ff a
+    | Some c ->
+      Format.pp_print_string ff c;
+      pp ff a;
+      Format.pp_print_string ff (color false Reset)
 
 end
 
@@ -59,7 +71,7 @@ let print_final = ref false
 
 let print_step = ref false
 
-let color_inv = ref (Color.color true Color.Cyan)
+let color_inv = ref (Some (Color.color true Color.Cyan))
 
 let state_brace = ref false
 
@@ -88,24 +100,24 @@ let print_state_raw pp_sym state =
     Format.print_cut ();
     Format.open_vbox 0;
     Format.open_vbox 2;
-    Format.print_string !color_inv;
-    Format.print_string "[";
-    Format.print_cut ();
-    D.pp_print pp_sym Format.std_formatter state;
-    (*L.pp Format.pp_print_string Format.std_formatter c;*)
-    Format.close_box ();
-    Format.print_cut ();
-    Format.print_string "]";
-    Format.print_string (Color.color false Color.Reset);
+    Color.print !color_inv (fun ff () ->
+        Format.print_string "[";
+        Format.print_cut ();
+        D.pp_print pp_sym Format.std_formatter state;
+        (*L.pp Format.pp_print_string Format.std_formatter c;*)
+        Format.close_box ();
+        Format.print_cut ();
+        Format.print_string "]";
+      ) Format.std_formatter ();
     Format.close_box ()
   end else begin
     Format.print_cut ();
     Format.open_vbox 2;
     Format.print_string "  ";
-    Format.print_string !color_inv;
-    D.pp_print pp_sym Format.std_formatter state;
-    (*L.pp Format.pp_print_string Format.std_formatter c;*)
-    Format.print_string (Color.color false Color.Reset);
+    Color.print !color_inv (fun ff () ->
+        D.pp_print pp_sym Format.std_formatter state;
+        (*L.pp Format.pp_print_string Format.std_formatter c;*)
+      ) Format.std_formatter ();
     Format.close_box ()
   end
 

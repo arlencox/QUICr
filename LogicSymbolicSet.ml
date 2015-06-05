@@ -36,7 +36,7 @@ let prec_e = function
   | Universe -> 100
 
 let rec pp_noparen_e ?parse:(parse=false) pp_sym ff t =
-  let pprec = pp_e ~prec:(prec_e t) pp_sym in
+  let pprec = pp_e ~parse:(parse) ~prec:(prec_e t) pp_sym in
   match t with
   | Empty ->
     if parse then

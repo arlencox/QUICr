@@ -1,5 +1,6 @@
 module type L = sig
   val file: string
+  val check: bool
 end
 
 module S = LogicSymbolicSet
@@ -84,7 +85,9 @@ module Make(L: L)(D: Interface.Domain
   let constrain cnstr t =
     let id = fresh_id t.c in
     Format.fprintf t.c.ff "let x%d = constrain %a x%d@." id (LogicSymbolicSet.pp ~parse:true Format.pp_print_int) cnstr t.id;
-    {t with t = D.constrain cnstr t.t; id}
+    let dt = D.constrain cnstr t.t in
+    if L.check then Format.fprintf t.c.ff "sat x%d %a@." id (LogicSymbolicSet.pp ~parse:true Format.pp_print_int) (D.serialize dt);
+    {t with t = dt; id}
 
 
   let serialize t =

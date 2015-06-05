@@ -22,16 +22,23 @@ let arg_blank = ("", Arg.Unit (fun () -> ()), " ")
 
 (** list of abstract domains to enable *)
 let domains = [
+#ifdef PKG_MLBDD
   ("-bdd-full", Arg.Unit (fun () -> push (module BDDFull.Domain)), " Full BDD-based domain");
 
   ("-bdd-opt", Arg.Unit (fun () -> push (module Eq.Domain.Make(Packer.Domain.Make(BDDFull.Domain)))), " Optimized BDD-based domain");
+#endif
   ("-lin", Arg.Unit (fun () -> push (module Lin.Domain)), " Lin set domain");
+#ifdef PKG_Z3
+  ("-smt", Arg.Unit (fun () -> push (module SMT.Domain)), " SMT-based set domain");
+#endif
+#ifdef PKG_QBF
   ("-qbf", Arg.String (fun solver ->
       let s = match solver with
-        | _ -> (module SAT.SolverDepQBF : SAT.Domain.Solver)
+        | _ -> (module QBF.SolverDepQBF : QBF.Domain.Solver)
       in
-      push (module SAT.Domain.Make((val s)))),
+      push (module QBF.Domain.Make((val s)))),
    "solver external QBF solver-based domain");
+#endif
 ]
 
 (** list of domain combinators to enable *)
@@ -64,14 +71,17 @@ let combinators = [
   (* debugger combinator *)
   ("-debug", Arg.Unit (fun () ->
        let module D = (val pop ()) in
-       let module P = DebugPrint.Domain.Make(D) in
+       let module P = Debugger.Domain.Make(D) in
        push (module P)
      ), " Use debug printer");
 
   (* trace combinator *)
   ("-trace", Arg.String (fun s ->
+       let c = s.[0] = '-' in
+       let s = String.sub s 1 ((String.length s) - 1) in
        let module L = (struct
          let file = s
+         let check = c
        end) in
        let module D = (val pop ()) in
        let module Log = Tracer.Domain.Make(L)(D) in
@@ -167,7 +177,7 @@ let run () =
   in
   let module D = (val d) in
   let module I = SDSL.Interp.Make(D) in
-  let module IT = DDom.Interp.Make(D) in
+  let module IT = STrace.Interp.Make(D) in
 
   (* do parsing *)
   let (close,stream,ft) = !stream in
@@ -187,7 +197,7 @@ let run () =
     I.interpret ast;
   | FT_STRACE ->
     let ast = try
-        DDom.Parser.trace DDom.Lexer.token lexbuf
+        STrace.Parser.trace STrace.Lexer.token lexbuf
       with Parsing.Parse_error ->
         let pos = lexbuf.Lexing.lex_curr_p in
         Format.printf "(%d:%d) Parse error@."

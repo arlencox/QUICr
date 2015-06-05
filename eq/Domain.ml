@@ -112,7 +112,12 @@ module Make
     | L.Eq(L.Sing a, L.Sing b) -> ((a,b)::eq, neq)
     | L.True -> (eq,neq)
     | L.False -> ([], L.False)
-    | c -> (eq, L.And(neq, c))
+    | c ->
+      match neq with
+      | L.True ->
+        (eq, c)
+      | neq ->
+        (eq, L.And(neq, c))
 
   let partition = partition ([], L.True)
 
@@ -175,8 +180,11 @@ module Make
         else
           L.And(L.Eq(L.Var a, L.Var b), cnstr)
       ) neq eq in
-    (* remaining equalities are sent to the underlying domain *)
-    D.sat t.d cnstr
+    if cnstr = L.True then
+      true
+    else
+      (* remaining equalities are sent to the underlying domain *)
+      D.sat t.d cnstr
 
   let is_bottom t =
     D.is_bottom t.d
