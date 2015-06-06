@@ -96,13 +96,49 @@ let pp_set_syms (c: string) (pp_sym: Format.formatter -> int -> unit)
       ) s true in
   ( )
 
-
-
 (** Module abbrevs *)
 
 module L = LogicSymbolicSet
 module R = Rename
 
+(** Compact printers *)
+let sym_2str (i: int): string = Printf.sprintf "S[%d]" i
+let e_2str: int L.e -> string =
+  let rec aux0 = function
+    | L.DisjUnion (e0, e1) -> Printf.sprintf "%s + %s" (aux0 e0) (aux0 e1)
+    | L.Union (e0, e1) -> Printf.sprintf "%s U %s" (aux0 e0) (aux0 e1)
+    | e -> aux1 e
+  and aux1 = function
+    | L.Inter (e0, e1) -> Printf.sprintf "%s & %s" (aux1 e0) (aux1 e1)
+    | e -> aux2 e
+  and aux2 = function 
+    | L.Diff (e0, e1) -> Printf.sprintf "%s \\ %s" (aux2 e0) (aux3 e1)
+    | e -> aux3 e
+  and aux3 = function 
+    | L.Comp e0 -> Printf.sprintf "Comp( %s )" (aux3 e0)
+    | e -> aux4 e
+  and aux4 = function
+    | L.Empty -> "emp"
+    | L.Universe -> "all"
+    | L.Var i -> sym_2str i
+    | L.Sing i -> Printf.sprintf "{ %s }" (sym_2str i)
+    | e -> Printf.sprintf "(%s)" (aux0 e) in
+  aux0
+let t_2str: int L.t -> string =
+  let rec aux0 = function
+    | L.And (t0, t1) -> Printf.sprintf "%s /\\ %s" (aux1 t0) (aux1 t1)
+    | t -> aux1 t
+  and aux1 = function
+    | L.Not t0 -> Printf.sprintf "NOT( %s )" (aux1 t0)
+    | t -> aux2 t
+  and aux2 = function
+    | L.Eq (e0, e1) -> Printf.sprintf "%s = %s" (e_2str e0) (e_2str e1)
+    | L.SubEq (e0, e1) -> Printf.sprintf "%s <= %s" (e_2str e0) (e_2str e1)
+    | L.In (i, e0) -> Printf.sprintf "%d <- %s" i (e_2str e0)
+    | L.True -> "True"
+    | L.False -> "False"
+    | t -> Printf.sprintf "(%s)" (aux0 t) in
+  aux0
 
 (** Abstract values *)
 
@@ -283,7 +319,7 @@ let pp
 
 let pp_debug = pp
 let pp_print = pp
-let pp_sym ch i = Format.fprintf ch "%d" i
+let pp_sym ch i = Format.fprintf ch "S[%d]" i
 
 
 (** Manipulating constraints *)
@@ -315,7 +351,7 @@ let u_add_lin (u: u) (i: int) (sl: set_lin): u = (* i = sl *)
         else u
       ) u.u_lin u in
   if IntMap.mem i u.u_lin then
-    Printf.printf "WARN,u_add_lin: over-writing constraint";
+    Printf.printf "WARN,u_add_lin: over-writing constraint\n";
   { u with u_lin = IntMap.add i sl u.u_lin }
 
 (* Guard operator, adds a new constraint *)
@@ -331,7 +367,7 @@ let u_constrain c (u: u): u =
       u_add_mem u i j
   | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
       if IntMap.mem i u.u_lin then
-        Printf.printf "WARN,constrain: existing linear constraint";
+        Printf.printf "WARN,constrain: existing linear constraint\n";
       let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
       { u with u_lin = IntMap.add i cons u.u_lin }
   | L.Eq (L.Var i, L.Var j) ->
@@ -348,19 +384,29 @@ let u_constrain c (u: u): u =
   | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
       u_add_lin u i { sl_sets = IntSet.singleton k;
                       sl_elts = IntSet.singleton j }
+  (* experimental cases for union *)
+  | L.Eq (L.Var i, L.Union (L.Var j, L.Sing k)) ->
+      u_add_inclusion (u_add_mem u k i) i j
+  (* experimental cases for inclusion *)
+  | L.SubEq (L.Sing i, L.Var j) ->
+      u_add_mem u i j
+  (* fall-back cases *)
   | L.Eq (L.Var i, e) ->
       begin
         match linearize e with
-        | Some lin -> u_add_lin u i lin
+        | Some lin -> u_add_lin u i lin (* this can be quite precise *)
         | None ->
-            Printf.printf "WARN,constrain: linearization failed";
+            Format.printf
+              "\nWARN,guard: linearization failed: S[%d] = %s\n%a\n"
+              i (e_2str e) (pp_debug pp_sym) (Some u);
             u
       end
   | L.SubEq (L.Var i, L.Var j) ->
       u_add_inclusion u i j
   | _ ->
       (* otherwise, we just drop the constraint *)
-      Format.eprintf "WARN,constrain,ignored: %a" (L.pp pp_sym) c;
+      Format.printf "\nWARN,guard: %s\n%a\n"
+        (t_2str c) (pp_debug pp_sym) (Some u);
       u
 let constrain (c: cnstr): t -> t = lift (u_constrain c)
 
@@ -466,23 +512,30 @@ let u_sat_lin (u: u) i sl =
 
 (* Sat operator, checks whether a constraint is implied by an abstract state *)
 let sat (x: t) (c: cnstr): bool =
-  match x with
-  | None -> true (* any constraint valid under _|_ *)
-  | Some u ->
-      (* trying to support the same constraints as in guard *)
-      match c with
-      | L.True -> true
-      | L.False -> false
-      | L.In (i, ex) -> u_sat_mem_ex u i ex
-      | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
-      | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
-      | L.Eq (L.Var i, ex) | L.Eq (ex, L.Var i) ->
-          begin
-            match linearize ex with
+  let r =
+    match x with
+    | None -> true (* any constraint valid under _|_ *)
+    | Some u ->
+        (* trying to support the same constraints as in guard *)
+        match c with
+        | L.True -> true
+        | L.False -> false
+        | L.In (i, ex) -> u_sat_mem_ex u i ex
+        | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
+        | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
+        | L.SubEq (L.Sing i, ex) -> u_sat_mem_ex u i ex
+        | L.Eq (L.Var i, ex) | L.Eq (ex, L.Var i) ->
+            begin
+              match linearize ex with
               | None -> false
               | Some lin -> u_sat_lin u i lin
-          end
-      | _ -> false
+            end
+        | _ -> false in
+  (* debugging results *)
+  if debug_module then
+    Format.printf "\nSat called, returned %b: %s\n%a\n" r (t_2str c)
+      (pp_debug pp_sym) x;
+  r
 
 (* Serialization, with a function to lists, also used in meet *)
 let serialize_2list (u: u): sym L.t list =
@@ -597,7 +650,7 @@ let u_reduce_eq (setv: int) (u: u): u =
           if IntMap.mem setv0 nlins then
             let sl0 = IntMap.find setv0 nlins
             and sl  = IntMap.find setv  nlins in
-            Printf.printf "WARN, reduce: choice between two set_lin eqs";
+            Printf.printf "WARN,reduce: choice between two set_lin eqs\n";
             IntMap.add setv0 (sl_more_gen sl sl0) nlins
           else IntMap.add setv0 (IntMap.find setv nlins) nlins
         else nlins in
