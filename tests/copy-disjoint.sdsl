@@ -1,0 +1,20 @@
+res = {};
+
+assume(s = fout U+ fin);
+assume(fout = {});
+
+while(*) {
+  kill x;
+  kill fin2;
+
+  assume(fin = fin2 U+ {x});
+  fin = fin2;
+  kill fin2;
+  
+  res = res U+ {x};
+
+  fout = fout U+ {x};
+};
+assume(fin = {});
+assume(fout = s);
+assert(res = s);
