@@ -18,17 +18,8 @@
  * The integration of this module here is a bit work in progress, so I leave
  * some cleaning tasks for later:
  *  - moving the libraries into utility files
- *  - now type t has a single field; remove struct
- *  - add Format printers in the maps
  *  - move stuffs specific to set_lin in a separate module
  *  - do reduction on a SET of symbols about to be removed, and not just one
- * 
- * The functions below still have a very rudimentary implementation, that
- * should be improved:
- *  - meet
- *  - serialize
- *  - query
- *  - combine
  *)
 
 (** Maps and Sets with printers *)
@@ -105,13 +96,49 @@ let pp_set_syms (c: string) (pp_sym: Format.formatter -> int -> unit)
       ) s true in
   ( )
 
-
-
 (** Module abbrevs *)
 
 module L = LogicSymbolicSet
 module R = Rename
 
+(** Compact printers *)
+let sym_2str (i: int): string = Printf.sprintf "S[%d]" i
+let e_2str: int L.e -> string =
+  let rec aux0 = function
+    | L.DisjUnion (e0, e1) -> Printf.sprintf "%s + %s" (aux0 e0) (aux0 e1)
+    | L.Union (e0, e1) -> Printf.sprintf "%s U %s" (aux0 e0) (aux0 e1)
+    | e -> aux1 e
+  and aux1 = function
+    | L.Inter (e0, e1) -> Printf.sprintf "%s & %s" (aux1 e0) (aux1 e1)
+    | e -> aux2 e
+  and aux2 = function 
+    | L.Diff (e0, e1) -> Printf.sprintf "%s \\ %s" (aux2 e0) (aux3 e1)
+    | e -> aux3 e
+  and aux3 = function 
+    | L.Comp e0 -> Printf.sprintf "Comp( %s )" (aux3 e0)
+    | e -> aux4 e
+  and aux4 = function
+    | L.Empty -> "emp"
+    | L.Universe -> "all"
+    | L.Var i -> sym_2str i
+    | L.Sing i -> Printf.sprintf "{ %s }" (sym_2str i)
+    | e -> Printf.sprintf "(%s)" (aux0 e) in
+  aux0
+let t_2str: int L.t -> string =
+  let rec aux0 = function
+    | L.And (t0, t1) -> Printf.sprintf "%s /\\ %s" (aux1 t0) (aux1 t1)
+    | t -> aux1 t
+  and aux1 = function
+    | L.Not t0 -> Printf.sprintf "NOT( %s )" (aux1 t0)
+    | t -> aux2 t
+  and aux2 = function
+    | L.Eq (e0, e1) -> Printf.sprintf "%s = %s" (e_2str e0) (e_2str e1)
+    | L.SubEq (e0, e1) -> Printf.sprintf "%s <= %s" (e_2str e0) (e_2str e1)
+    | L.In (i, e0) -> Printf.sprintf "%d <- %s" i (e_2str e0)
+    | L.True -> "True"
+    | L.False -> "False"
+    | t -> Printf.sprintf "(%s)" (aux0 t) in
+  aux0
 
 (** Abstract values *)
 
@@ -292,7 +319,7 @@ let pp
 
 let pp_debug = pp
 let pp_print = pp
-let pp_sym ch i = Format.fprintf ch "%d" i
+let pp_sym ch i = Format.fprintf ch "S[%d]" i
 
 
 (** Manipulating constraints *)
@@ -324,55 +351,64 @@ let u_add_lin (u: u) (i: int) (sl: set_lin): u = (* i = sl *)
         else u
       ) u.u_lin u in
   if IntMap.mem i u.u_lin then
-    Printf.printf "WARN,u_add_lin: over-writing constraint";
+    Printf.printf "WARN,u_add_lin: over-writing constraint\n";
   { u with u_lin = IntMap.add i sl u.u_lin }
 
 (* Guard operator, adds a new constraint *)
-let constrain (c: cnstr): t -> t =
-  let u_constrain (u: u): u =
-    (* Basic constraints added using the utility functions:
-     *  all constraints needed in the graph examples are supported,
-     *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
-     *  constraints should just not arise here! *)
-    match c with
-    | L.True -> u
-    | L.False -> raise Bottom
-    | L.In (i, L.Var j) ->
-        u_add_mem u i j
-    | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
-        if IntMap.mem i u.u_lin then
-          Printf.printf "WARN,constrain: existing linear constraint";
-        let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
-        { u with u_lin = IntMap.add i cons u.u_lin }
-    | L.Eq (L.Var i, L.Var j) ->
-        u_add_eq u i j
-    | L.Eq (L.Var i, L.DisjUnion (L.Var j, L.Var k))
-    | L.Eq (L.DisjUnion (L.Var j, L.Var k), L.Var i) ->
-        u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
-                        sl_elts = IntSet.empty }
-    | L.Eq (L.Var i, L.Sing j) | L.Eq (L.Sing j, L.Var i)
-    | L.Eq (L.Var i, L.DisjUnion (L.Empty, L.Sing j))
-    | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Empty)) ->
-        u_add_lin u i { sl_sets = IntSet.empty;
-                        sl_elts = IntSet.singleton j }
-    | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
-        u_add_lin u i { sl_sets = IntSet.singleton k;
-                        sl_elts = IntSet.singleton j }
-    | L.Eq (L.Var i, e) ->
-        begin
-          match linearize e with
-          | Some lin -> u_add_lin u i lin
-          | None ->
-              Printf.printf "WARN,constrain: linearization failed";
-              u
-        end
-    | L.SubEq (L.Var i, L.Var j) ->
-        u_add_inclusion u i j
-    | _ ->
-        (* otherwise, we just drop the constraint *)
-        Format.eprintf "WARN,constrain,ignored: %a" (L.pp pp_sym) c;
-        u in
-  lift u_constrain
+let u_constrain c (u: u): u =
+  (* Basic constraints added using the utility functions:
+   *  all constraints needed in the graph examples are supported,
+   *  except the S0 = S1 \cup S2 (not \uplus), as I believe such
+   *  constraints should just not arise here! *)
+  match c with
+  | L.True -> u
+  | L.False -> raise Bottom
+  | L.In (i, L.Var j) ->
+      u_add_mem u i j
+  | L.Eq (L.Var i, L.Empty) | L.Eq (L.Empty, L.Var i) ->
+      if IntMap.mem i u.u_lin then
+        Printf.printf "WARN,constrain: existing linear constraint\n";
+      let cons = { sl_elts = IntSet.empty; sl_sets = IntSet.empty } in
+      { u with u_lin = IntMap.add i cons u.u_lin }
+  | L.Eq (L.Var i, L.Var j) ->
+      u_add_eq u i j
+  | L.Eq (L.Var i, L.DisjUnion (L.Var j, L.Var k))
+  | L.Eq (L.DisjUnion (L.Var j, L.Var k), L.Var i) ->
+      u_add_lin u i { sl_sets = IntSet.add j (IntSet.singleton k);
+                      sl_elts = IntSet.empty }
+  | L.Eq (L.Var i, L.Sing j) | L.Eq (L.Sing j, L.Var i)
+  | L.Eq (L.Var i, L.DisjUnion (L.Empty, L.Sing j))
+  | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Empty)) ->
+      u_add_lin u i { sl_sets = IntSet.empty;
+                      sl_elts = IntSet.singleton j }
+  | L.Eq (L.Var i, L.DisjUnion (L.Sing j, L.Var k)) ->
+      u_add_lin u i { sl_sets = IntSet.singleton k;
+                      sl_elts = IntSet.singleton j }
+  (* experimental cases for union *)
+  | L.Eq (L.Var i, L.Union (L.Var j, L.Sing k)) ->
+      u_add_inclusion (u_add_mem u k i) i j
+  (* experimental cases for inclusion *)
+  | L.SubEq (L.Sing i, L.Var j) ->
+      u_add_mem u i j
+  (* fall-back cases *)
+  | L.Eq (L.Var i, e) ->
+      begin
+        match linearize e with
+        | Some lin -> u_add_lin u i lin (* this can be quite precise *)
+        | None ->
+            Format.printf
+              "\nWARN,guard: linearization failed: S[%d] = %s\n%a\n"
+              i (e_2str e) (pp_debug pp_sym) (Some u);
+            u
+      end
+  | L.SubEq (L.Var i, L.Var j) ->
+      u_add_inclusion u i j
+  | _ ->
+      (* otherwise, we just drop the constraint *)
+      Format.printf "\nWARN,guard: %s\n%a\n"
+        (t_2str c) (pp_debug pp_sym) (Some u);
+      u
+let constrain (c: cnstr): t -> t = lift (u_constrain c)
 
 
 (* Helper functions to check basic constraints *)
@@ -476,27 +512,60 @@ let u_sat_lin (u: u) i sl =
 
 (* Sat operator, checks whether a constraint is implied by an abstract state *)
 let sat (x: t) (c: cnstr): bool =
-  match x with
-  | None -> true (* any constraint valid under _|_ *)
-  | Some u ->
-      (* trying to support the same constraints as in guard *)
-      match c with
-      | L.True -> true
-      | L.False -> false
-      | L.In (i, ex) -> u_sat_mem_ex u i ex
-      | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
-      | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
-      | L.Eq (L.Var i, ex) | L.Eq (ex, L.Var i) ->
-          begin
-            match linearize ex with
+  let r =
+    match x with
+    | None -> true (* any constraint valid under _|_ *)
+    | Some u ->
+        (* trying to support the same constraints as in guard *)
+        match c with
+        | L.True -> true
+        | L.False -> false
+        | L.In (i, ex) -> u_sat_mem_ex u i ex
+        | L.Eq (L.Var i, L.Var j) -> u_sat_eq u i j
+        | L.SubEq (L.Var i, L.Var j) -> u_sat_sub u i j
+        | L.SubEq (L.Sing i, ex) -> u_sat_mem_ex u i ex
+        | L.Eq (L.Var i, ex) | L.Eq (ex, L.Var i) ->
+            begin
+              match linearize ex with
               | None -> false
               | Some lin -> u_sat_lin u i lin
-          end
-      | _ -> false
+            end
+        | _ -> false in
+  (* debugging results *)
+  if debug_module then
+    Format.printf "\nSat called, returned %b: %s\n%a\n" r (t_2str c)
+      (pp_debug pp_sym) x;
+  r
 
-let serialize (x: t): output =
-  Printf.printf "WARN: serialize will return default, imprecise result\n";
-  L.True
+(* Serialization, with a function to lists, also used in meet *)
+let serialize_2list (u: u): sym L.t list =
+  let aux f m =
+    IntMap.fold (fun i s l -> IntSet.fold (fun j l -> f i j :: l) s l) m [ ] in
+  let make_set f s =
+    let _, e =
+      IntSet.fold
+        (fun i (b, e) ->
+          if b then false, f i
+          else false, L.DisjUnion (f i, e)
+        ) s (true, L.Empty) in
+    e in
+  let l =
+    IntMap.fold
+      (fun i sl l ->
+        let elts = make_set (fun i -> L.Sing i) sl.sl_elts in
+        let sets = make_set (fun i -> L.Var i) sl.sl_sets in
+        L.Eq (L.Var i, L.DisjUnion (elts, sets)) :: l
+      ) u.u_lin [ ] in
+  aux (fun i j -> L.Eq (L.Var i, L.Var j)) u.u_eqs
+  @ aux (fun i j -> L.In (j, L.Var i)) u.u_mem
+  @ aux (fun i j -> L.SubEq (L.Var j, L.Var i)) u.u_sub
+  @ l
+let serialize: t -> output = function
+  | None -> L.False
+  | Some u ->
+      match serialize_2list u with
+      | [ ] -> L.True
+      | c :: l -> List.fold_left (fun o c -> L.And (c, o)) c l
 
 
 (** Reduction *)
@@ -581,7 +650,7 @@ let u_reduce_eq (setv: int) (u: u): u =
           if IntMap.mem setv0 nlins then
             let sl0 = IntMap.find setv0 nlins
             and sl  = IntMap.find setv  nlins in
-            Printf.printf "WARN, reduce: choice between two set_lin eqs";
+            Printf.printf "WARN,reduce: choice between two set_lin eqs\n";
             IntMap.add setv0 (sl_more_gen sl sl0) nlins
           else IntMap.add setv0 (IntMap.find setv nlins) nlins
         else nlins in
@@ -822,8 +891,11 @@ let widening: t -> t -> t = join
 
 (* Intersection *)
 let meet (x0: t) (x1: t): t =
-  Printf.printf "WARN: meet will return default, imprecise result (1st arg)\n";
-  x0
+  match x0, x1 with
+  | None, _ | _, None -> None
+  | Some u0, Some u1 ->
+      let l1 = serialize_2list u1 in
+      Some (List.fold_left (fun u c -> u_constrain c u) u0 l1)
 
 (* Inclusion checking *)
 let le (x0: t) (x1: t): bool =
@@ -859,11 +931,22 @@ let le (x0: t) (x1: t): bool =
 
 (** Interface for reduction *)
 
-(* For now, this domain still offers no facility for reduction *)
+(* For now, the reduction primitives simply export equalities;
+ * but do not try to do additional internal reduction, to generate
+ * more equalities (we may do it later). *)
 let query (x: t): query =
-  Printf.printf "WARN: query will return default, imprecise result\n";
-  { L.get_eqs     = (fun ( ) -> [ ]);
-    L.get_eqs_sym = (fun _ -> [ ]); }
+  match x with
+  | None ->
+      { L.get_eqs     = (fun ( ) -> [ ]);
+        L.get_eqs_sym = (fun _ -> [ ]); }
+  | Some u ->
+      let f i = IntSet.fold (fun j a -> (i, j) :: a) in
+      let eqs () = IntMap.fold f u.u_eqs [ ] in
+      let eqs_of i =
+        try IntSet.fold (fun j a -> j :: a) (IntMap.find i u.u_eqs) [ ]
+        with Not_found -> [ ] in
+      { L.get_eqs     = eqs;
+        L.get_eqs_sym = eqs_of; }
 let combine (q: query) (x: t) =
-  Printf.printf "WARN: combine will return default, imprecise result\n";
-  x
+  List.fold_left (fun x (s0, s1) -> constrain (L.Eq (L.Var s0, L.Var s1)) x)
+    x (q.L.get_eqs ( ))

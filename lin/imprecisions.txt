@@ -1,0 +1,41 @@
+branch-assume.sdsl                      U, NotIn, InclComp
+branch-update.sdsl                      U, NotIn, InclComp
+for-in-100-var.sdsl                     U, C, NotIn
+for-in-1000-var-sub.sdsl                U, C, NotIn
+for-in-1000-var.sdsl                    U, C, NotIn
+for-in-2-var.sdsl                       U, C, NotIn
+for-in-200-var.sdsl                     U, C, NotIn
+for-in-26-var.sdsl                      U, C, NotIn
+for-in-50-var.sdsl                      U, C, NotIn
+for-in-direct.sdsl                      U, C
+for-in-disj.sdsl                        U, C
+for-in-simple.sdsl                      U, C
+for-in-update.sdsl                      U, C, NotIn
+rename-reroot.sdsl                      -
+sa-choose-union.sdsl                    U
+sa-choose.sdsl                          InterEmp
+sa-choose2.sdsl                         -
+sa-choose3.sdsl                         a+b+c=All
+sa-choose4.sdsl                         U, InterEmp
+sa-copy.sdsl                            U, InComp
+sa-filter.sdsl                          U, InComp, NotIn
+sa-filter1.sdsl                         U, NotIn
+sa-fnd-builtin-filter.sdsl              U, InComp, NotIn, InSing, NotInSing
+sa-fnd-copy.sdsl                        U, InComp
+sa-fnd-difference.sdsl                  C, SingIncl
+sa-fnd-has-key.sdsl                     SingIncl, NotSingIncl
+sa-fnd-intersection.sdsl                I, SingIncl
+sa-fnd-partition.sdsl                   U, C, NotIn
+sa-fnd-test-nested-dependent.sdsl       C, InSing, Lin ??????
+sa-fnd-test-pop.sdsl                    U, C, Disj, SingEq
+sa-fnd-test-union.sdsl                  U
+sa-merge.sdsl                           U, C
+sa-mutated-base.sdsl                    U, SingIncl, InclSing
+sa-mutated-base2.sdsl                   U, SingIncl, InclSing
+sa-partition.sdsl                       U, C, NotIn
+sa-set-ops.sdsl                         U, C, SingIn, NotSingIn, Disj
+sa-static-partition.sdsl                SingIncl, CompSing
+sa-union-twice.sdsl                     U, InSing, SingIncl, InclSing
+subsets-eq-transitivity.sdsl            -
+trivial.sdsl                            -
+trivial2.sdsl                           -
