@@ -18,7 +18,7 @@ while(*) {
 
   // run body of loop
   if(x in exc) { } else {
-    res = res U x;
+    res = res U {x};
   };
   
   // close the loop

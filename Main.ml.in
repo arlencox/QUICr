@@ -30,6 +30,7 @@ let domains = [
   ("-lin", Arg.Unit (fun () -> push (module Lin.Domain)), " Lin set domain");
 #ifdef PKG_Z3
   ("-smt", Arg.Unit (fun () -> push (module SMT.Domain)), " SMT-based set domain");
+("-quic", Arg.Unit (fun () -> push (module QUICG.Domain)), " QUIC Graphs-based set domain");
 #endif
 #ifdef PKG_QBF
   ("-qbf", Arg.String (fun solver ->

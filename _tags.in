@@ -10,6 +10,7 @@
 <sing/*>: for-pack(Sing)
 <qbf/*>: for-pack(QBF)
 <smt/*>: for-pack(SMT)
+<quicg/*>: for-pack(QUICG)
 <ds/*>: for-pack(DS)
 <strace/*>: for-pack(STrace)
 <tracer/*>: for-pack(Tracer)
@@ -20,5 +21,5 @@
 <*> or <bdd-full/*>: package(mlbdd)
 #endif
 #ifdef PKG_Z3
-<Main.*> or <SMT.*> or <smt/*>: package(Z3)
+<Main.*> or <SMT.*> or <smt/*> or <QUICG.*> or <quicg/*>: package(Z3)
 #endif

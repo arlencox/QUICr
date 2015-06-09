@@ -10,78 +10,103 @@ end
 module ISet = Set.Make(Int)
 module IMap = Map.Make(Int)
 
+type nop =
+  | And
+  | Or
+
+let nnop = function
+  | And -> Or
+  | Or -> And
+
+type qop =
+  | Forall
+  | Exists
+
+let nqop = function
+  | Forall -> Exists
+  | Exists -> Forall
+
+type var = int
+
 type l =
   | Var of int
-  | And of c * c
-  | Or of c * c
+  | Nop of nop * c list
   | Not of c
-  | Exists of int * c
-  | ForAll of int * c
-  | True
-  | False
+  | Qop of qop * var list * c
 and c = l H.hash_consed
 
 type h = l H.t
 
-let mvar h v =
+let mk_var h v : c =
   H.hashcons h (Var v)
 
-let mand h a b =
+let mk_true h : c =
+  H.hashcons h (Nop (And, []))
+
+let mk_false h : c =
+  H.hashcons h (Nop (Or, []))
+
+let mk_and h a b =
   let e = match a.H.node,b.H.node with
-    | True, b -> b
-    | a, True -> a
-    | False, _
-    | _, False -> False
-    | _ -> And(a,b)
+    | Nop (Or, []), _
+    | _, Nop (Or, []) -> Nop (Or, [])
+    | Nop (And, aa), Nop (And, ba) -> Nop (And, List.rev_append aa ba)
+    | Nop (And, aa), _ -> Nop (And, b::aa)
+    | _, Nop (And, ba) -> Nop (And, a::ba)
+    | _ -> Nop (And, [a;b])
   in
   H.hashcons h e
 
-let mor h a b =
+let rec mk_andl h = function
+  | [] -> mk_true h
+  | hd::tl -> mk_and h hd (mk_andl h tl)
+
+
+let mk_or h a b =
   let e = match a.H.node,b.H.node with
-    | False, b -> b
-    | a, False -> a
-    | True, _
-    | _, True -> True
-    | _ -> Or(a,b)
+    | Nop (And, []), _
+    | _, Nop (And, []) -> Nop (And, [])
+    | Nop (Or, aa), Nop (Or, ba) -> Nop (Or, List.rev_append aa ba)
+    | Nop (Or, aa), _ -> Nop (Or, b::aa)
+    | _, Nop (Or, ba) -> Nop (Or, a::ba)
+    | _ -> Nop (Or, [a;b])
   in
   H.hashcons h e
 
-let mnot h a =
+let rec mk_orl h = function
+  | [] -> mk_false h
+  | hd::tl -> mk_or h hd (mk_orl h tl)
+
+let mk_not h a =
   let e = match a.H.node with
-    | False -> True
-    | True -> False
+    | Nop (op, []) -> Nop (nnop op, [])
     | Not a -> a.H.node
     | _ -> Not a
   in
   H.hashcons h e
 
-let mexists h v a =
+let mk_exists h v a =
   let e = match a.H.node with
-    | True -> True
-    | False -> False
-    | Var v' when v == v' -> True
-    | _ -> Exists(v,a)
+    | Qop(Exists, vs, a) -> Qop(Exists, v::vs, a)
+    | Nop(op, []) -> Nop(op, [])
+    | _ -> Qop(Exists, [v], a)
   in
   H.hashcons h e
 
-let mforall h v a =
+let mk_forall h v a =
   let e = match a.H.node with
-    | True -> True
-    | False -> False
-    | Var v' when v == v' -> False
-    | _ -> ForAll(v,a)
+    | Qop(Forall, vs, a) -> Qop(Forall, v::vs, a)
+    | Nop(op, []) -> Nop(op, [])
+    | _ -> Qop(Forall, [v], a)
   in
   H.hashcons h e
 
-let mtrue h = H.hashcons h True
+let mk_imply h a b =
+  mk_or h (mk_not h a) b
 
-let mfalse h = H.hashcons h False
+let mk_eq h a b =
+  mk_and h (mk_imply h a b) (mk_imply h b a)
 
-let mimply h a b =
-  mor h (mnot h a) b
-
-let meq h a b =
-  mand h (mimply h a b) (mimply h b a)
 
 type prenex_state = {
   var_map : int IMap.t;
