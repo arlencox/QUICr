@@ -25,7 +25,7 @@ BENCHMARKS.html: BENCHMARKS.md
 	pandoc -s BENCHMARKS.md > BENCHMARKS.html
 
 install: META
-	ocamlfind install quicr META _build/QUICr.cma _build/QUICr.cmxa _build/QUICr.a _build/LogicSymbolicSet.cmi _build/Rename.cmi _build/Access.cmi
+	ocamlfind install quicr META _build/QUICr.cma _build/QUICr.cmxa _build/QUICr.a _build/LogicSymbolicSet.cmi _build/Rename.cmi _build/Access.cmi _build/Interface.cmi
 	rm META
 
 uninstall:

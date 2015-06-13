@@ -7,6 +7,6 @@
 name="quicr"
 description="Abstract domain library for sets"
 version="0.1"
-requires=STRINGIFY(DEP_BDD DEP_Z3)
+requires=STRINGIFY(DEP_BDD DEP_Z3 unix)
 archive(byte)="QUICr.cma"
 archive(native)="QUICr.cmxa"
