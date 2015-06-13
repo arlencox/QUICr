@@ -6,14 +6,14 @@ FLAGS=-j 0 -cflag -short-paths -pp "cppo $(PP_FLAGS)"
 
 all: _tags QUICr.mllib
 	ocamlbuild -use-ocamlfind $(FLAGS) Main.d.byte Main.native QUICr.cma QUICr.cmxa
+	rm _tags
+	rm QUICr.mllib
 
 %:%.in
 	cppo -n $(PP_FLAGS) -o $@ $<
 
 clean:
 	ocamlbuild -clean
-	-rm _tags
-	-rm QUICr.mllib
 
 BENCHMARKS.md : Main.native $(wildcard tests/*.strace) $(wildcard tests/*.sdsl)
 	python scripts/results > BENCHMARKS.md
