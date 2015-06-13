@@ -20,7 +20,7 @@ machine_id <- recent_record$Machine.ID
 build_id <- recent_record$Build.ID
 
 # extract the data replacing the frame
-t <- t[t$Machine.ID == machine_id && t$Build.ID == build_id, -c(1,2,3) ]
+t <- t[ which(t$Machine.ID == machine_id & t$Build.ID == build_id) , -c(1,2,3) ]
 
 # run averages
 run_time <- ddply(.data=t, c("Config", "Test"), summarise, Time = mean(Time), Pass = mean(Pass), Total = mean(Total))
@@ -46,7 +46,7 @@ machine_id <- recent_record$Machine.ID
 build_id <- recent_record$Build.ID
 
 # extract the data replacing the frame
-t <- t[t$Machine.ID == machine_id && t$Build.ID == build_id, -c(1,2,3) ]
+t <- t[ which(t$Machine.ID == machine_id & t$Build.ID == build_id) , -c(1,2,3) ]
 
 # run averages
 run_time <- ddply(

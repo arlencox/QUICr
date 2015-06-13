@@ -87,3 +87,5 @@ check_Z3
 check_mlbdd
 cppo $options Main.ml.in -o Main.ml
 cppo $options -n _tags.in -o _tags
+cppo $options -n QUICr.mllib.in -o QUICr.mllib
+cppo $options -n META.in -o META

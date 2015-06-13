@@ -3,6 +3,15 @@
 -bdd-full -eq -sing
 -bdd-full -eq -pack -sing
 -bdd-full -pack -eq -sing
--qbf depqbf -sing
+#-qbf depqbf -sing
 -lin
 -lin -eq
+-lin -eq -sing
+-quic -sing
+-quic -eq -sing
+-quic -pack -eq -sing
+-quic -eq -pack -sing
+-smt -sing
+-smt -eq -sing
+-smt -pack -eq -sing
+-smt -eq -pack -sing

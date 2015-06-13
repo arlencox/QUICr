@@ -6,8 +6,8 @@ import re
 import os
 import csv
 
-timeout_time = 60.0
-iterations = 10
+timeout_time = 20.0
+iterations = 3
 
 def machine_id():
     return ["%X" % (uuid.getnode())]

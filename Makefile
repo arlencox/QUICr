@@ -2,10 +2,10 @@
 
 FLAGS=-cflag -short-paths
 
-all: Main.ml
-	ocamlbuild -use-ocamlfind $(FLAGS) Main.d.byte Main.native
+all: Main.ml QUICr.mllib
+	ocamlbuild -use-ocamlfind $(FLAGS) Main.d.byte Main.native QUICr.cma QUICr.cmxa
 
-Main.ml : Main.ml.in
+Main.ml _tags QUICr.mllib : Main.ml.in _tags.in QUICr.mllib.in
 	./configure
 
 clean:
@@ -21,3 +21,9 @@ benchmark:
 
 BENCHMARKS.html: BENCHMARKS.md
 	pandoc -s BENCHMARKS.md > BENCHMARKS.html
+
+install:
+	ocamlfind install quicr META _build/QUICr.cma _build/QUICr.cmxa _build/QUICr.a _build/LogicSymbolicSet.cmi _build/Rename.cmi _build/Access.cmi
+
+uninstall:
+	ocamlfind remove quicr
