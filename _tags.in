@@ -15,6 +15,7 @@
 <strace/*>: for-pack(STrace)
 <tracer/*>: for-pack(Tracer)
 <debugger/*>: for-pack(Debugger)
+<selector/*>: for-pack(Selector)
 <Main.*>: package(str)
 <*> or <stats/*>: package(unix)
 #ifdef PKG_MLBDD

@@ -1,0 +1,12 @@
+#ifdef PKG_MLBDD
+#define DEP_BDD mlbdd
+#endif
+#ifdef PKG_Z3
+#define DEP_Z3 Z3
+#endif
+name="quicr"
+description="Abstract domain library for sets"
+version="0.1"
+requires=STRINGIFY(DEP_BDD DEP_Z3)
+archive(byte)="QUICr.cma"
+archive(native)="QUICr.cmxa"
