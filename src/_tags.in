@@ -1,0 +1,26 @@
+<quicr/quicr/ds/*>: for-pack(QUICr_Internal.DS)
+<quicr/quicr/quicg-lib/*>: for-pack(QUICr_Internal.QUICGLib)
+<quicr/quicr/*>: for-pack(QUICr_Internal)
+<sdsl/*>: for-pack(SDSL)
+<strace/*>: for-pack(STrace)
+
+<quicr/quicr/Stats.*>: package(unix)
+
+#ifdef PKG_MLBDD
+<quicr/quicr/BDDFull.*> : package(mlbdd)
+<main/Main.*> : package(mlbdd)
+#endif
+
+#ifdef PKG_Z3
+<quicr/quicr/SMT.*> : package(Z3)
+<quicr/quicr/QUICG.*> : package(Z3)
+<quicr/quicr/QUICGLib.*> : package(Z3)
+<quicr/quicr/quicg-lib/*> : package(Z3)
+<main/Main.*> : package(Z3)
+#endif
+
+"quicr" : include
+
+<main/sdsl/*> : for-pack(SDSL)
+<main/strace/*> : for-pack(STrace)
+<main/Main.*> : package(unix), package(str)
