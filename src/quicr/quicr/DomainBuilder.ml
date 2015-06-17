@@ -32,6 +32,10 @@ let build_domain name args =
   | "bdd-opt", _ ->
     raise (Build_error "BDD-based domains were disabled at compile time")
 #endif
+  | "bdd-x-full", [] ->
+    SetDomain (module BDDXFull)
+  | "bdd-x-full", _ ->
+    raise (Build_error "bdd-x-full domain does not accept any arguments")
   | "lin", [] ->
     SetDomain (module Lin)
   | "lin", _ ->

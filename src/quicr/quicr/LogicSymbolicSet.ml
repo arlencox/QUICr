@@ -235,3 +235,57 @@ let rec normalize = function
   | Not a -> Not (normalize a)
   | True -> True
   | False -> False
+
+let rec to_cnf_e = function
+  | Empty ->
+    (DS.CNF.mk_false, DS.CNF.mk_true)
+  | Universe ->
+    (DS.CNF.mk_true, DS.CNF.mk_true)
+  | DisjUnion (a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    (DS.CNF.mk_or a b, DS.CNF.mk_and (DS.CNF.mk_not (DS.CNF.mk_and a b)) (DS.CNF.mk_and ao bo))
+
+  | Union (a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    (DS.CNF.mk_or a b, DS.CNF.mk_and ao bo)
+  | Inter (a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    (DS.CNF.mk_and a b, DS.CNF.mk_and ao bo)
+  | Diff(a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    (DS.CNF.mk_and a (DS.CNF.mk_not b), DS.CNF.mk_and ao bo)
+  | Comp a ->
+    let (a, ao) = to_cnf_e a in
+    (DS.CNF.mk_not a, ao)
+  | Var v
+  | Sing v ->
+    (DS.CNF.mk_var v, DS.CNF.mk_true)
+
+let rec to_cnf = function
+  | Eq (a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    DS.CNF.mk_and (DS.CNF.mk_and (DS.CNF.mk_eq a b) ao) bo
+  | SubEq (a, b) ->
+    let (a, ao) = to_cnf_e a in
+    let (b, bo) = to_cnf_e b in
+    DS.CNF.mk_and (DS.CNF.mk_and (DS.CNF.mk_imply a b) ao) bo
+  | In (a, b) ->
+    let a = DS.CNF.mk_var a in
+    let (b, bo) = to_cnf_e b in
+    DS.CNF.mk_and (DS.CNF.mk_imply a b) bo
+  | And (a, b) ->
+    let a = to_cnf a in
+    let b = to_cnf b in
+    DS.CNF.mk_and a b
+  | Not _ ->
+    failwith "unsupported"
+  | True ->
+    DS.CNF.mk_true
+  | False ->
+    DS.CNF.mk_true
+
