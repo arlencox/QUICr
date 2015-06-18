@@ -5,9 +5,11 @@ module ISet = Set.Make(struct
     let compare = (-)
   end)
 
-type ctx = MLBDD.man
+module B = MLBDD.Raw
 
-type t = MLBDD.t
+type ctx = B.man
+
+type t = B.t
 
 type sym = int
 
@@ -17,47 +19,45 @@ type output = cnstr
 
 type query = sym L.q 
 
-let init () = MLBDD.init ()
+let init () = B.init ()
 
-let top ctx = MLBDD.dtrue ctx
+let top ctx = B.dtrue
 
-let bottom ctx = MLBDD.dfalse ctx
+let bottom ctx = B.dfalse
 
-let context t = MLBDD.manager t
-
-let symbols t = MLBDD.support t |> MLBDD.list_of_support
+let symbols ctx t = B.support ctx t |> B.list_of_support
 
 let rec of_expr ctx = function
   | L.Empty ->
-    (MLBDD.dfalse ctx, MLBDD.dtrue ctx)
+    (B.dfalse, B.dtrue)
   | L.Universe ->
-    (MLBDD.dtrue ctx, MLBDD.dtrue ctx)
+    (B.dtrue, B.dtrue)
   | L.DisjUnion (a,b) -> 
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
     (* A ^ B = 0
        A /\ B = false
        ~(A /\ B) *)
-    (MLBDD.dor a b, (MLBDD.dand (MLBDD.dand ac bc) (MLBDD.dnot (MLBDD.dand a b))))
+    (B.dor ctx a b, (B.dand ctx (B.dand ctx ac bc) (B.dnot (B.dand ctx a b))))
   | L.Union (a,b) ->
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
-    (MLBDD.dor a b, MLBDD.dand ac bc)
+    (B.dor ctx a b, B.dand ctx ac bc)
   | L.Inter (a,b) ->
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
-    (MLBDD.dand a b, MLBDD.dand ac bc)
+    (B.dand ctx a b, B.dand ctx ac bc)
   | L.Diff (a,b) ->
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
-    (MLBDD.dand a (MLBDD.dnot b), MLBDD.dand ac bc)
+    (B.dand ctx a (B.dnot b), B.dand ctx ac bc)
   | L.Comp a ->
     let (a,ac) = of_expr ctx a in
-    (MLBDD.dnot a, ac)
+    (B.dnot a, ac)
   | L.Var v ->
-    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx)
+    (B.ithvar ctx v, B.dtrue)
   | L.Sing v ->
-    (MLBDD.ithvar ctx v, MLBDD.dtrue ctx)
+    (B.ithvar ctx v, B.dtrue)
 
 exception Unsupported
 
@@ -67,50 +67,50 @@ let rec of_cnstr is_pos is_over ctx c =
   | L.Eq (a,b), true ->
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
-    MLBDD.dand (MLBDD.eq a b) (MLBDD.dand ac bc)
+    B.dand ctx (B.eq ctx a b) (B.dand ctx ac bc)
   | L.Eq _, false ->
     if is_over then
-      MLBDD.dtrue ctx
+      B.dtrue
     else
       raise Unsupported
   | L.SubEq (a,b), true ->
     let (a,ac) = of_expr ctx a in
     let (b,bc) = of_expr ctx b in
-    MLBDD.dand (MLBDD.imply a b) (MLBDD.dand ac bc)
+    B.dand ctx (B.imply ctx a b) (B.dand ctx ac bc)
   | L.SubEq _, false ->
     if is_over then
-      MLBDD.dtrue ctx
+      B.dtrue
     else
       raise Unsupported
   | L.In (av,b), _ ->
     if is_over then
-      MLBDD.dtrue ctx
+      B.dtrue
     else
       raise Unsupported
   | L.And (a,b), true ->
     let a = r is_pos a in
     let b = r is_pos b in
-    MLBDD.dand a b
+    B.dand ctx a b
 
   | L.And (a,b), false ->
     let a = r is_pos a in
     let b = r is_pos b in
     if is_over then
-      MLBDD.dor a b
+      B.dor ctx a b
     else 
       raise Unsupported
   | L.Not a, _ ->
     r (not is_pos) a
   | L.True, false
   | L.False, true ->
-    MLBDD.dfalse ctx
+    B.dfalse
   | L.False, false
   | L.True, true ->
-    MLBDD.dtrue ctx
+    B.dtrue
 
-let constrain cnstr t =
-  let c = of_cnstr true true (context t) cnstr in
-  MLBDD.dand c t
+let constrain ctx cnstr t =
+  let c = of_cnstr true true ctx cnstr in
+  B.dand ctx c t
 
 
 let rec bin_of_list emp op acc = function
@@ -123,8 +123,8 @@ let rec bin_of_list emp op acc = function
 
 let bin_of_list emp op l = bin_of_list emp op [] l
 
-let serialize t =
-  MLBDD.allprime (MLBDD.dnot t) |>
+let serialize ctx t =
+  B.allprime ctx (B.dnot t) |>
   List.map (fun el ->
      let (l,r) =
        el |>
@@ -138,39 +138,34 @@ let serialize t =
     ) |>
   bin_of_list L.True (fun a b -> L.And (a,b))
 
-let sat t cnstr =
+let sat ctx t cnstr =
   try
-    let c = of_cnstr true false (context t) cnstr in
-    MLBDD.is_true (MLBDD.imply t c)
+    let c = of_cnstr true false ctx cnstr in
+    B.is_true (B.imply ctx t c)
   with Unsupported ->
     false
 
 
-let join a b = MLBDD.dor a b
+let join ctx a b = B.dor ctx a b
 
 let widening = join
 
-let meet a b = MLBDD.dand a b
+let meet ctx a b = B.dand ctx a b
 
-let le a b = MLBDD.is_true (MLBDD.imply a b)
+let le ctx a b = B.is_true (B.imply ctx a b)
 
-let forget syms t =
-  let ctx = context t in
-  let supp = syms |>
-             List.map (MLBDD.ithvar ctx) |>
-             List.fold_left MLBDD.dand (MLBDD.dtrue (context t)) |>
-             MLBDD.support in
-  MLBDD.exists supp t
+let forget ctx syms t =
+  B.exists ctx syms t
 
 
-let is_bottom t = MLBDD.is_false t
+let is_bottom ctx t = B.is_false t
 
-let is_top t = MLBDD.is_true t
+let is_top ctx t = B.is_true t
 
 
 
-let rename_symbols rename t =
-  MLBDD.permutef (Rename.get rename) t
+let rename_symbols ctx rename t =
+  B.permutef ctx (Rename.get rename) t
 
 
 module SymSymSet = Set.Make(struct
@@ -186,10 +181,10 @@ module SymSet = Set.Make(struct
     let compare = (-)
   end)
 
-let query t =
+let query ctx t =
   let rmap = ref None in
   let get_subset_map () =
-    let map = MLBDD.allprime (MLBDD.dnot t) |>
+    let map = B.allprime ctx (B.dnot t) |>
               List.filter (function
                   | [(true, _); (false, _)]
                   | [(false, _); (true, _)] -> true
@@ -239,13 +234,13 @@ let query t =
     L.get_eqs_sym = get_eqs_sym;
   }
 
-let combine q t =
+let combine ctx q t =
   List.fold_left (fun t (s1, s2) ->
-        constrain (L.Eq (L.Var s1, L.Var s2)) t
+        constrain ctx (L.Eq (L.Var s1, L.Var s2)) t
     ) t (q.L.get_eqs ())
 
-let pp_print pp_sym ff t =
-  let s = serialize t in
+let pp_print ctx pp_sym ff t =
+  let s = serialize ctx t in
   LogicSymbolicSet.pp pp_sym ff s
 
 let pp_debug = pp_print

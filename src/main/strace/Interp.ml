@@ -36,19 +36,19 @@ module Make(D: QUICr.I
     | A.Top -> D.top ctx
     | A.Bottom -> D.bottom ctx
     | A.Constrain (c, s) ->
-      D.constrain c (get s)
+      D.constrain ctx c (get s)
     | A.Join (s1, s2) ->
-      D.join (get s1) (get s2)
+      D.join ctx (get s1) (get s2)
     | A.Widening (s1, s2) ->
-      D.widening (get s1) (get s2)
+      D.widening ctx (get s1) (get s2)
     | A.Meet (s1, s2) ->
-      D.meet (get s1) (get s2)
+      D.meet ctx (get s1) (get s2)
     | A.Forget (l, s) ->
-      D.forget l (get s)
+      D.forget ctx l (get s)
     | A.Rename (r, s) ->
-      D.rename_symbols (QUICr.Rename.of_assoc_list r) (get s)
+      D.rename_symbols ctx (QUICr.Rename.of_assoc_list r) (get s)
     in
-    if !I.print_step then ID.print_state_raw Format.pp_print_int d;
+    if !I.print_step then ID.print_state_raw ctx Format.pp_print_int d;
     d
 
   let interp_p ctx map stats p =
@@ -62,25 +62,25 @@ module Make(D: QUICr.I
 
     let (r,stats) = match p with
       | A.Sat(s,c) ->
-        let r = D.sat (get s) c in
+        let r = D.sat ctx (get s) c in
         let stats = {stats with
                      sat_t = stats.sat_t + (if r then 1 else 0);
                      sat_c = stats.sat_c + 1} in
         (r,stats)
       | A.Le(s1,s2) ->
-        let r = D.le (get s1) (get s2) in
+        let r = D.le ctx (get s1) (get s2) in
         let stats = {stats with
                      le_t = stats.le_t + (if r then 1 else 0);
                      le_c = stats.le_c + 1} in
         (r,stats)
       | A.IsBottom s ->
-        let r = D.is_bottom (get s) in
+        let r = D.is_bottom ctx (get s) in
         let stats = {stats with
                      is_bottom_t = stats.is_bottom_t + (if r then 1 else 0);
                      is_bottom_c = stats.is_bottom_c + 1} in
         (r,stats)
     | A.IsTop s ->
-        let r = D.is_top (get s) in
+        let r = D.is_top ctx (get s) in
         let stats = {stats with
                      is_top_t = stats.is_top_t + (if r then 1 else 0);
                      is_top_c = stats.is_top_c + 1} in

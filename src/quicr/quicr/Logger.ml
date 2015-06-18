@@ -23,10 +23,7 @@ module Make(L: L)(D: Interface.Domain
     ctx: D.ctx;
   }
 
-  type t = {
-    t: D.t;
-    c: ctx;
-  }
+  type t = D.t
 
   type sym = int
 
@@ -36,8 +33,8 @@ module Make(L: L)(D: Interface.Domain
 
   type query = int S.q
 
-  let pp ff t =
-    D.pp_print Format.pp_print_int ff t.t
+  let pp ctx ff t =
+    D.pp_print ctx.ctx Format.pp_print_int ff t
     (*S.pp Format.pp_print_int ff (D.serialize t.t)*)
 
   let ppc ff c =
@@ -51,143 +48,130 @@ module Make(L: L)(D: Interface.Domain
 
   let top ctx =
     Format.fprintf ctx.ff "top@.";
-    {
-      t = D.top ctx.ctx;
-      c = ctx;
-    }
+    D.top ctx.ctx
 
   let bottom ctx =
     Format.fprintf ctx.ff "bottom@.";
-    {
-      t = D.bottom ctx.ctx;
-      c = ctx;
-    }
+    D.bottom ctx.ctx
 
-  let context t = 
-    Format.fprintf t.c.ff "context@.";
-    t.c
+  let symbols ctx t =
+    Format.fprintf ctx.ff "symbols: %a@." (pp ctx) t;
+    D.symbols ctx.ctx t
 
-  let symbols t =
-    Format.fprintf t.c.ff "symbols: %a@." pp t;
-    D.symbols t.t
-
-  let constrain cnstr t =
-    Format.fprintf t.c.ff "@[<v 2>constrain:@,";
-    Format.fprintf t.c.ff "cnstr: %a@," ppc cnstr;
-    Format.fprintf t.c.ff "pre  : %a@," pp t;
-    let t = {t with t = D.constrain cnstr t.t} in
-    Format.fprintf t.c.ff "post : %a" pp t;
-    Format.fprintf t.c.ff "@]@.";
+  let constrain ctx cnstr t =
+    Format.fprintf ctx.ff "@[<v 2>constrain:@,";
+    Format.fprintf ctx.ff "cnstr: %a@," ppc cnstr;
+    Format.fprintf ctx.ff "pre  : %a@," (pp ctx) t;
+    let t = D.constrain ctx.ctx cnstr t in
+    Format.fprintf ctx.ff "post : %a" (pp ctx) t;
+    Format.fprintf ctx.ff "@]@.";
     t
 
 
-  let serialize t =
-    Format.fprintf t.c.ff "serialize: %a@." pp t;
-    D.serialize t.t
+  let serialize ctx t =
+    Format.fprintf ctx.ff "serialize: %a@." (pp ctx) t;
+    D.serialize ctx.ctx t
 
-  let sat t cnstr =
-    Format.fprintf t.c.ff "@[<v 2>sat:@,";
-    Format.fprintf t.c.ff "pre  : %a@," pp t;
-    Format.fprintf t.c.ff "cnstr: %a@," ppc cnstr;
-    let res = D.sat t.t cnstr in
-    Format.fprintf t.c.ff "res  : %b" res;
-    Format.fprintf t.c.ff "@]@.";
+  let sat ctx t cnstr =
+    Format.fprintf ctx.ff "@[<v 2>sat:@,";
+    Format.fprintf ctx.ff "pre  : %a@," (pp ctx) t;
+    Format.fprintf ctx.ff "cnstr: %a@," ppc cnstr;
+    let res = D.sat ctx.ctx t cnstr in
+    Format.fprintf ctx.ff "res  : %b" res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let join a b =
-    Format.fprintf a.c.ff "@[<v 2>join:@,";
-    Format.fprintf a.c.ff "a  : %a@," pp a;
-    Format.fprintf a.c.ff "b  : %a@," pp b;
-    let res = {a with
-               t = D.join a.t b.t} in
-    Format.fprintf a.c.ff "res: %a" pp res;
-    Format.fprintf a.c.ff "@]@.";
+  let join ctx a b =
+    Format.fprintf ctx.ff "@[<v 2>join:@,";
+    Format.fprintf ctx.ff "a  : %a@," (pp ctx) a;
+    Format.fprintf ctx.ff "b  : %a@," (pp ctx) b;
+    let res = D.join ctx.ctx a b in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let widening a b =
-    Format.fprintf a.c.ff "@[<v 2>widening:@,";
-    Format.fprintf a.c.ff "a  : %a@," pp a;
-    Format.fprintf a.c.ff "b  : %a@," pp b;
-    let res = {a with
-               t = D.widening a.t b.t} in
-    Format.fprintf a.c.ff "res: %a" pp res;
-    Format.fprintf a.c.ff "@]@.";
+  let widening ctx a b =
+    Format.fprintf ctx.ff "@[<v 2>widening:@,";
+    Format.fprintf ctx.ff "a  : %a@," (pp ctx) a;
+    Format.fprintf ctx.ff "b  : %a@," (pp ctx) b;
+    let res = D.widening ctx.ctx a b in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let meet a b =
-    Format.fprintf a.c.ff "@[<v 2>meet:@,";
-    Format.fprintf a.c.ff "a  : %a@," pp a;
-    Format.fprintf a.c.ff "b  : %a@," pp b;
-    let res = {a with
-               t = D.meet a.t b.t} in
-    Format.fprintf a.c.ff "res: %a" pp res;
-    Format.fprintf a.c.ff "@]@.";
+  let meet ctx a b =
+    Format.fprintf ctx.ff "@[<v 2>meet:@,";
+    Format.fprintf ctx.ff "a  : %a@," (pp ctx) a;
+    Format.fprintf ctx.ff "b  : %a@," (pp ctx) b;
+    let res = D.meet ctx.ctx a b in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let le a b =
-    Format.fprintf a.c.ff "@[<v 2>le:@,";
-    Format.fprintf a.c.ff "a  : %a@," pp a;
-    Format.fprintf a.c.ff "b  : %a@," pp b;
-    let res = D.le a.t b.t in
-    Format.fprintf a.c.ff "res: %b" res;
-    Format.fprintf a.c.ff "@]@.";
+  let le ctx a b =
+    Format.fprintf ctx.ff "@[<v 2>le:@,";
+    Format.fprintf ctx.ff "a  : %a@," (pp ctx) a;
+    Format.fprintf ctx.ff "b  : %a@," (pp ctx) b;
+    let res = D.le ctx.ctx a b in
+    Format.fprintf ctx.ff "res: %b" res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let is_bottom t =
-    Format.fprintf t.c.ff "@[<v 2>is_bottom:@,";
-    Format.fprintf t.c.ff "pre: %a@," pp t;
-    let res = D.is_bottom t.t in
-    Format.fprintf t.c.ff "res: %b" res;
-    Format.fprintf t.c.ff "@]@.";
+  let is_bottom ctx t =
+    Format.fprintf ctx.ff "@[<v 2>is_bottom:@,";
+    Format.fprintf ctx.ff "pre: %a@," (pp ctx) t;
+    let res = D.is_bottom ctx.ctx t in
+    Format.fprintf ctx.ff "res: %b" res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let is_top t =
-    Format.fprintf t.c.ff "@[<v 2>is_top:@,";
-    Format.fprintf t.c.ff "pre: %a@," pp t;
-    let res = D.is_top t.t in
-    Format.fprintf t.c.ff "res: %b" res;
-    Format.fprintf t.c.ff "@]@.";
+  let is_top ctx t =
+    Format.fprintf ctx.ff "@[<v 2>is_top:@,";
+    Format.fprintf ctx.ff "pre: %a@," (pp ctx) t;
+    let res = D.is_top ctx.ctx t in
+    Format.fprintf ctx.ff "res: %b" res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let forget syms t =
-    Format.fprintf t.c.ff "@[<v 2>forget:@,";
-    Format.fprintf t.c.ff "syms: @[<h>%a@]@," (Format.pp_print_list Format.pp_print_int) syms;
-    Format.fprintf t.c.ff "pre : %a@," pp t;
-    let res = {t with t = D.forget syms t.t} in
-    Format.fprintf t.c.ff "res: %a" pp res;
-    Format.fprintf t.c.ff "@]@.";
+  let forget ctx syms t =
+    Format.fprintf ctx.ff "@[<v 2>forget:@,";
+    Format.fprintf ctx.ff "syms: @[<h>%a@]@," (Format.pp_print_list Format.pp_print_int) syms;
+    Format.fprintf ctx.ff "pre : %a@," (pp ctx) t;
+    let res = D.forget ctx.ctx syms t in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let rename_symbols map t =
-    Format.fprintf t.c.ff "@[<v 2>rename_symbols:@,";
+  let rename_symbols ctx map t =
+    Format.fprintf ctx.ff "@[<v 2>rename_symbols:@,";
     Rename.fold (fun a b () ->
-        Format.fprintf t.c.ff "  %d -> %d@," a b
+        Format.fprintf ctx.ff "  %d -> %d@," a b
       ) map ();
-    Format.fprintf t.c.ff "pre : %a@," pp t;
-    let res = {t with t = D.rename_symbols map t.t} in
-    Format.fprintf t.c.ff "res: %a" pp res;
-    Format.fprintf t.c.ff "@]@.";
+    Format.fprintf ctx.ff "pre : %a@," (pp ctx) t;
+    let res = D.rename_symbols ctx.ctx map t in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let query t =
-    Format.fprintf t.c.ff "@[<v 2>query:@,";
-    Format.fprintf t.c.ff "pre: %a" pp t;
-    Format.fprintf t.c.ff "@]@.";
-    D.query t.t
+  let query ctx t =
+    Format.fprintf ctx.ff "@[<v 2>query:@,";
+    Format.fprintf ctx.ff "pre: %a" (pp ctx) t;
+    Format.fprintf ctx.ff "@]@.";
+    D.query ctx.ctx t
 
-  let combine q t =
-    Format.fprintf t.c.ff "@[<v 2>combine:@,";
-    Format.fprintf t.c.ff "pre: %a@," pp t;
-    let res = {t with t = D.combine q t.t} in
-    Format.fprintf t.c.ff "res: %a" pp res;
-    Format.fprintf t.c.ff "@]@.";
+  let combine ctx q t =
+    Format.fprintf ctx.ff "@[<v 2>combine:@,";
+    Format.fprintf ctx.ff "pre: %a@," (pp ctx) t;
+    let res = D.combine ctx.ctx q t in
+    Format.fprintf ctx.ff "res: %a" (pp ctx) res;
+    Format.fprintf ctx.ff "@]@.";
     res
 
-  let pp_print pp_sym ff t =
-    D.pp_print pp_sym ff t.t
+  let pp_print ctx pp_sym ff t =
+    D.pp_print ctx.ctx pp_sym ff t
 
-  let pp_debug pp_sym ff t =
-    D.pp_print pp_sym ff t.t
+  let pp_debug ctx pp_sym ff t =
+    D.pp_print ctx.ctx pp_sym ff t
 
 
 end

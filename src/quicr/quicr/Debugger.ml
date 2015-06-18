@@ -31,8 +31,6 @@ module Make(D: Interface.Domain
 
   let bottom = D.bottom 
 
-  let context = D.context
-
   let symbols = D.symbols
 
   let constrain = D.constrain

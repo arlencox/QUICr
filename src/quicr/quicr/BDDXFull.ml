@@ -12,10 +12,7 @@ module B = BDDLibX.Make(Int)
 
 type ctx = B.ctx
 
-type t = {
-  t: B.t;
-  c: ctx;
-}
+type t = B.t
 
 type sym = int
 
@@ -27,20 +24,12 @@ type query = sym L.q
 
 let init () = B.init ()
 
-let top ctx = {
-  t = B.true_ ctx;
-  c = ctx;
-}
+let top ctx = B.true_ ctx
 
-let bottom ctx = {
-  t = B.false_ ctx;
-  c = ctx;
-}
+let bottom ctx = B.false_ ctx
 
-let context t = t.c
-
-let symbols t =
-  B.support t.c t.t
+let symbols ctx t =
+  B.support ctx t
 
 let rec of_expr ctx = function
   | L.Empty ->
@@ -123,9 +112,9 @@ let rec of_cnstr is_pos is_over ctx c =
   | L.True, true ->
     B.true_ ctx
 
-let constrain cnstr t =
-  let c = of_cnstr true true (context t) cnstr in
-  {t with t = B.and_ t.c c t.t}
+let constrain ctx cnstr t =
+  let c = of_cnstr true true ctx cnstr in
+  B.and_ ctx c t
 
 
 let rec bin_of_list emp op acc = function
@@ -154,46 +143,40 @@ let serialize t =
     ) |>
   bin_of_list L.True (fun a b -> L.And (a,b))*)
 
-let sat t cnstr =
+let sat ctx t cnstr =
   try
-    let c = of_cnstr true false (context t) cnstr in
-    B.is_true t.c (B.imply_ t.c t.t c)
+    let c = of_cnstr true false ctx cnstr in
+    B.is_true ctx (B.imply_ ctx t c)
   with Unsupported ->
     false
 
 
-let join a b =
-  {a with
-   t = B.or_ a.c a.t b.t }
+let join ctx a b = B.or_ ctx a b
 
 let widening = join
 
-let meet a b = 
-  {a with
-   t = B.and_ a.c a.t b.t }
+let meet ctx a b = B.and_ ctx a b
 
-let le a b = B.is_true a.c (B.imply_ a.c a.t b.t)
+let le ctx a b = B.is_true ctx (B.imply_ ctx a b)
 
-let forget syms t =
-  {t with
-   t = B.exists_ t.c syms t.t }
+let forget ctx syms t = B.exists_ ctx syms t
 
-let is_bottom t = B.is_false t.c t.t
+let is_bottom ctx t = B.is_false ctx t
 
-let is_top t = B.is_true t.c t.t
+let is_top ctx t = B.is_true ctx t
 
 
 
-let rename_symbols rename t =
+let rename_symbols ctx rename t =
   let v = {
-    B.true_ = B.true_ t.c;
-    B.false_ = B.false_ t.c;
+    B.true_ = B.true_ ctx;
+    B.false_ = B.false_ ctx;
     B.if_ = (fun v l r ->
         let v = Rename.get rename v in
-        B.ite_ t.c (B.var_ t.c v) l r
+        B.ite_ ctx (B.var_ ctx v) l r
       );
   } in
-  {t with t = B.visit t.c v t.t }
+  B.visit ctx v t
 
 
 module SymSymSet = Set.Make(struct
@@ -209,7 +192,7 @@ module SymSet = Set.Make(struct
     let compare = (-)
   end)
 
-let query t =
+let query ctx t =
   let get_eqs () = [] in
   let get_eqs_sym sym = [] in
   {
@@ -217,9 +200,9 @@ let query t =
     L.get_eqs_sym = get_eqs_sym;
   }
 
-let combine q t =
+let combine ctx q t =
   List.fold_left (fun t (s1, s2) ->
-        constrain (L.Eq (L.Var s1, L.Var s2)) t
+        constrain ctx (L.Eq (L.Var s1, L.Var s2)) t
     ) t (q.L.get_eqs ())
 
 let rec pp_print pp_sym ff t =
@@ -228,7 +211,7 @@ let rec pp_print pp_sym ff t =
   | B.False -> Format.fprintf ff "true"
   | B.If(l,v,r,_id) -> Format.fprintf ff "ite(%a,%a,%a)" pp_sym v (pp_print pp_sym) l (pp_print pp_sym) r
 
-let pp_print pp_sym ff t =
-  pp_print pp_sym ff t.t
+let pp_print ctx pp_sym ff t =
+  pp_print pp_sym ff t
 
 let pp_debug = pp_print

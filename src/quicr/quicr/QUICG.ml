@@ -12,7 +12,6 @@ module ISet = Set.Make(Int)
 type ctx = D.ctx
 
 type t = {
-  ctx: ctx;
   d: D.t;
   vars: ISet.t;
 }
@@ -25,21 +24,16 @@ type query = int L.q
 let init = D.init
 
 let top ctx = {
-  ctx;
   d = D.top ctx 0 0;
   vars = ISet.empty;
 }
 
 let bottom ctx = {
-  ctx;
   d = D.bottom ctx 0 0;
   vars = ISet.empty;
 }
 
-let context t = 
-  t.ctx
-
-let symbols t =
+let symbols ctx t =
   ISet.elements t.vars
 
 let rec of_expr = function
@@ -123,13 +117,12 @@ let rec of_cnstr is_pos is_over c =
   | L.True, true ->
     DS.CNF.mk_true
 
-let constrain cnstr t =
+let constrain ctx cnstr t =
   let c = of_cnstr true true cnstr in
   let syms = DS.CNF.symbols c in
   let vars = List.fold_left (fun vars sym ->
       ISet.add sym vars
     ) t.vars syms in
-  let ctx = t.ctx in
   let d = List.fold_left (fun d clause ->
       let (a,b) = List.fold_left (fun (n,p) (b,v) ->
           if b then
@@ -140,18 +133,16 @@ let constrain cnstr t =
       D.constrain_qc ctx d a b
     ) t.d c in
   {
-    ctx;
     vars;
     d;
   }
 
-let serialize t =
+let serialize ctx t =
   failwith "Serialize unimplemented"
 
-let sat t cnstr =
+let sat ctx t cnstr =
   try
     let c = of_cnstr true false cnstr in
-    let ctx = t.ctx in
     let d = D.top ctx 0 0 in
     let d = List.fold_left (fun d clause ->
         let (a,b) = List.fold_left (fun (n,p) (b,v) ->
@@ -166,46 +157,44 @@ let sat t cnstr =
   with Unsupported ->
     false
 
-let bound op a b =
+let bound op ctx a b =
   {
-    ctx=a.ctx;
-    d = op a.ctx a.d b.d;
+    d = op ctx a.d b.d;
     vars = ISet.union a.vars b.vars;
   }
 
-let join a b =
-  bound D.join a b
+let join ctx a b =
+  bound D.join ctx a b
 
-let widening a b =
-  bound D.widen a b
+let widening ctx a b =
+  bound D.widen ctx a b
 
-let meet a b =
-  bound D.meet a b
+let meet ctx a b =
+  bound D.meet ctx a b
 
-let le a b =
-  D.le a.ctx a.d b.d
+let le ctx a b =
+  D.le ctx a.d b.d
 
-let is_bottom t =
-  D.is_bottom t.ctx t.d
+let is_bottom ctx t =
+  D.is_bottom ctx t.d
 
-let is_top t =
-  D.is_top t.ctx t.d
+let is_top ctx t =
+  D.is_top ctx t.d
 
-let forget syms t =
-  let ctx = t.ctx in
+let forget ctx syms t =
   let d = List.fold_left (fun d sym -> D.forget_set ctx d sym) t.d syms in
   let vars = List.fold_left (fun vars sym -> ISet.remove sym vars) t.vars syms in
-  { d; ctx; vars }
+  { d; vars }
 
-let rename_symbol a b t =
+let rename_symbol ctx a b t =
   let vars = t.vars |>
              ISet.remove a |>
              ISet.add b in
   {t with
    vars;
-   d = D.rename_set t.ctx t.d a b}
+   d = D.rename_set ctx t.d a b}
 
-let rename_symbols rename t =
+let rename_symbols ctx rename t =
   let counter = ref (ISet.max_elt t.vars) in
   let fresh () =
     incr counter;
@@ -235,27 +224,27 @@ let rename_symbols rename t =
           Hashtbl.replace ftot f b;
           f
       in
-      rename_symbol a tgt t
+      rename_symbol ctx a tgt t
     ) rename t in
   let t = Hashtbl.fold (fun f tgt t ->
-      rename_symbol f tgt t
+      rename_symbol ctx f tgt t
     ) ftot t in
   t
 
-let query t =
+let query ctx t =
   {
     L.get_eqs = (fun () -> []);
     L.get_eqs_sym = (fun s -> []);
   }
 
-let combine q t =
+let combine ctx q t =
   List.fold_left (fun t (s1, s2) ->
-      constrain (L.Eq (L.Var s1, L.Var s2)) t
+      constrain ctx (L.Eq (L.Var s1, L.Var s2)) t
     ) t (q.L.get_eqs ())
 
-let pp_debug pp_sym ff t =
-  D.fmt t.ctx pp_sym pp_sym ff t.d
+let pp_debug ctx pp_sym ff t =
+  D.fmt ctx pp_sym pp_sym ff t.d
 
-let pp_print pp_sym ff t =
-  D.fmt t.ctx pp_sym pp_sym ff t.d
+let pp_print ctx pp_sym ff t =
+  D.fmt ctx pp_sym pp_sym ff t.d
 

@@ -1,6 +1,6 @@
 .PHONY: all clean benchmark
 
-PP_FLAGS=$(shell ./check_deps Z3 4.4.0.0 mlbdd 0.1)
+PP_FLAGS=$(shell ./check_deps Z3 4.4.0.0 mlbdd 0.5)
 
 FLAGS=-j 0 -cflag -short-paths -pp "cppo $(PP_FLAGS)"
 

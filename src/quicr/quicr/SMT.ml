@@ -34,30 +34,24 @@ module ISet = Set.Make(Int)
 module IMap = Map.Make(Int)
 
 type t = {
-  ctx: ctx;
   syms: int IMap.t;
   expr: Z3.Expr.expr;
 }
 
 let top ctx =
   {
-    ctx = ctx;
     syms = IMap.empty;
     expr = Z3.Boolean.mk_true ctx.c;
   }
 
 let bottom ctx =
   {
-    ctx = ctx;
     syms = IMap.empty;
     expr = Z3.Boolean.mk_false ctx.c;
   }
 
 
-let context t =
-  t.ctx
-
-let symbols t =
+let symbols ctx t =
   List.map fst (IMap.bindings t.syms)
 
 let get_variable ctx id =
@@ -168,14 +162,12 @@ let rec of_cnstr map is_pos is_over ctx c =
   | L.True, true ->
     Z3.Boolean.mk_true ctx.c
 
-let constrain cnstr t =
-  let ctx = t.ctx in
+let constrain ctx cnstr t =
   let map = ref t.syms in
   let c = of_cnstr map true true ctx cnstr in
   {
     expr = Z3.Boolean.mk_and ctx.c [c; t.expr];
     syms = !map;
-    ctx;
   }
 
 let is_valid ctx e =
@@ -191,21 +183,20 @@ let is_valid ctx e =
   | Z3.Solver.UNKNOWN -> failwith "Solver returned unknown"
 
 
-let sat t cnstr =
+let sat ctx t cnstr =
   try
-    let ctx = t.ctx in
     let map = ref t.syms in
-    let c = of_cnstr map true false (context t) cnstr in
+    let c = of_cnstr map true false ctx cnstr in
     (*Format.printf "@. SAT: %s@." (Z3.Expr.to_string c);*)
     is_valid ctx (Z3.Boolean.mk_implies ctx.c t.expr c)
   with Unsupported ->
     false
 
-let is_top t =
-  is_valid t.ctx t.expr
+let is_top ctx t =
+  is_valid ctx t.expr
 
-let is_bottom t =
-  is_valid t.ctx (Z3.Boolean.mk_not t.ctx.c t.expr)
+let is_bottom ctx t =
+  is_valid ctx (Z3.Boolean.mk_not ctx.c t.expr)
 
 let add_eq ctx eqs expr =
   List.fold_left (fun e (a,b) ->
@@ -231,8 +222,7 @@ let project_out ctx ids expr =
     Z3.Quantifier.expr_of_quantifier q
 
 
-let le t1 t2 =
-  let ctx = t1.ctx in
+let le ctx t1 t2 =
   let used = ref ISet.empty in
   let projs = ref ISet.empty in
   let eqs = ref [] in
@@ -263,8 +253,7 @@ let le t1 t2 =
   let v = Z3.Boolean.mk_implies ctx.c t1e t2.expr in
   is_valid ctx v
 
-let unify_environment t1 t2 =
-  let ctx = t1.ctx in
+let unify_environment ctx t1 t2 =
   let t1used = ref ISet.empty in
   let t2used = ref ISet.empty in
   let t1proj = ref ISet.empty in
@@ -312,29 +301,27 @@ let unify_environment t1 t2 =
             project_out ctx t2projs in
   (syms, t1e, t2e)
 
-let join t1 t2 =
-  let (syms, t1e, t2e) = unify_environment t1 t2 in
-  let expr = Z3.Boolean.mk_or t1.ctx.c [t1e; t2e] in
+let join ctx t1 t2 =
+  let (syms, t1e, t2e) = unify_environment ctx t1 t2 in
+  let expr = Z3.Boolean.mk_or ctx.c [t1e; t2e] in
   let expr = Z3.Expr.simplify expr None in
   {
-    ctx=t1.ctx;
     expr;
     syms;
   }
 
 let widening = join
 
-let meet t1 t2 = 
-  let (syms, t1e, t2e) = unify_environment t1 t2 in
-  let expr = Z3.Boolean.mk_and t1.ctx.c [t1e; t2e] in
+let meet ctx t1 t2 = 
+  let (syms, t1e, t2e) = unify_environment ctx t1 t2 in
+  let expr = Z3.Boolean.mk_and ctx.c [t1e; t2e] in
   let expr = Z3.Expr.simplify expr None in
   {
-    ctx=t1.ctx;
     expr;
     syms;
   }
 
-let forget syms t =
+let forget ctx syms t =
   let proj,syms = List.fold_left (fun (proj,syms) s ->
       try
         let id = IMap.find s t.syms in
@@ -342,31 +329,31 @@ let forget syms t =
       with Not_found ->
         (proj, syms)
     ) (ISet.empty,t.syms) syms in
-  {t with
-   expr = project_out t.ctx proj t.expr;
+  {
+   expr = project_out ctx proj t.expr;
    syms
   }
 
-let rename_symbols rename t =
+let rename_symbols ctx rename t =
   let old_ids = IMap.fold (fun _ id ids -> ISet.add id ids) t.syms ISet.empty in
   let syms = Rename.fold (fun a b syms ->
-      let id = try IMap.find a t.syms with Not_found -> fresh_count t.ctx in
+      let id = try IMap.find a t.syms with Not_found -> fresh_count ctx in
       IMap.add b id syms
     ) rename t.syms in
   let new_ids = IMap.fold (fun _ id ids -> ISet.add id ids) syms ISet.empty in
   let expired_ids = ISet.diff old_ids new_ids in
-  let expr = project_out t.ctx expired_ids t.expr in
-  {t with expr; syms}
+  let expr = project_out ctx expired_ids t.expr in
+  {expr; syms}
 
-let query t =
+let query ctx t =
   {
     L.get_eqs = (fun () -> []);
     L.get_eqs_sym = (fun s -> []);
   }
 
-let combine q t =
+let combine ctx q t =
   List.fold_left (fun t (s1, s2) ->
-      constrain (L.Eq (L.Var s1, L.Var s2)) t
+      constrain ctx (L.Eq (L.Var s1, L.Var s2)) t
     ) t (q.L.get_eqs ())
 
 let and_list l =
@@ -470,7 +457,7 @@ let rec to_constrain rmap e  =
   end
 
 
-let serialize t =
+let serialize ctx t =
   let (rmap,eqs) = IMap.fold (fun v id (rmap,eqs) ->
       try
         let vo = IMap.find id rmap in
@@ -483,7 +470,7 @@ let serialize t =
   let c = to_constrain rmap expr in
   and_list (c::eqs)
 
-let pp_print pp_sym ff t =
+let pp_print ctx pp_sym ff t =
   (*let (rmap,eqs) = IMap.fold (fun v id (rmap,eqs) ->
       try
         let vo = IMap.find id rmap in
@@ -496,7 +483,7 @@ let pp_print pp_sym ff t =
   let s = Z3.Expr.to_string expr in
 
   IMap.iter (fun v id ->
-      Format.fprintf ff "%a := %s@," pp_sym v (Z3.Expr.to_string (get_variable t.ctx id))
+      Format.fprintf ff "%a := %s@," pp_sym v (Z3.Expr.to_string (get_variable ctx id))
     ) t.syms;
   Format.fprintf ff "%s" s
   (*let s = serialize t in*)

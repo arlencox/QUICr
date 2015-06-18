@@ -17,78 +17,75 @@ module type Domain = sig
   (** [bottom ctx] creates a new bottom element from a context [ctx]. *)
   val bottom : ctx -> t
 
-  (** [context t] returns the context used to construct [t] *)
-  val context : t -> ctx
-
   (** [symbols t] returns the symbols constrained in [t] *)
-  val symbols : t -> sym list
+  val symbols : ctx -> t -> sym list
 
   (** {2 Constraint Interfaces} *)
 
   (** [constrain c t] abstracts constraint [c] and computes meet of the result
       with [t] *)
-  val constrain : cnstr -> t -> t
+  val constrain : ctx -> cnstr -> t -> t
 
   (** [serialize t] returns the constraint that represents [t] *)
-  val serialize : t -> output
+  val serialize : ctx -> t -> output
 
   (** [sat t c] checks if the abstract state [t] satisfies the constraints [c].
       If [c] is unrepresentable by the domain this will always be false.
   *)
-  val sat : t -> cnstr -> bool
+  val sat : ctx -> t -> cnstr -> bool
 
   (** {2 Binary Domain Operations} *)
 
   (** [join a b] overapproximates the abstraction [a] or the
       abstraction [b].  *)
-  val join : t -> t -> t
+  val join : ctx -> t -> t -> t
 
   (** [widening a b] overapproximates the abstraction [a] or the
       abstraction [b], guaranteeing stabilization. *)
-  val widening : t -> t -> t
+  val widening : ctx -> t -> t -> t
 
   (** [meet a b] overapproximates the abstraction [a] and the
       abstraction [b]. *)
-  val meet : t -> t -> t
+  val meet : ctx -> t -> t -> t
 
   (** [le a b] determines if [a] is contained in [b] ([a] is less than
       or equal to [b]). *)
-  val le : t -> t -> bool
+  val le : ctx -> t -> t -> bool
 
   (** [is_bottom t] returns true if [t] is the bottom element *)
-  val is_bottom: t -> bool
+  val is_bottom: ctx -> t -> bool
 
   (** [is_top t] returns true if [t] is the top element *)
-  val is_top: t -> bool
+  val is_top: ctx -> t -> bool
 
   (** {2 Symbol Manipulation} *)
 
   (** [forget syms t] forgets meaning of (projects out) the symbols [syms] in
       the domain [t]. *)
-  val forget : sym list -> t -> t
+  val forget : ctx -> sym list -> t -> t
 
   (** [rename_symbols f t] renames each symbol in [t] to the corresponding
       symbol returned by the rename structure [f].  Relationships are
       maintained, assuming the mapping does not reuse any symbols *)
-  val rename_symbols : sym Rename.t -> t -> t
+  val rename_symbols : ctx -> sym Rename.t -> t -> t
 
   (** {2 Query interface} *)
 
   (** [query t] returns a query datatype that is bound to the abstract state
       [t] *)
-  val query: t -> query
+  val query: ctx -> t -> query
 
   (** [combine q t] use a query from another abstract state (in a different
       domain) to strengthen this domain *)
-  val combine: query -> t -> t
+  val combine: ctx -> query -> t -> t
 
   (** [pp_debug s f t] pretty print the domain's internal structure using [s]
       to format symbols to the formatter [f] *)
-  val pp_debug: (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
+  val pp_debug: ctx -> (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
 
   (** [pp_print s f t] pretty print the abstract state [s] to format symbols to
       the formatter [f] *)
-  val pp_print: (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
+  val pp_print: ctx -> (Format.formatter -> sym -> unit) -> Format.formatter -> t -> unit
 
 end
 
@@ -102,21 +99,21 @@ module type DomainRenamable = sig
       Each element in mapping [(syma, symb, symc)] cause [syma] to be matched
       with [symb] producing [symc].  The same symbol should not occur more than
       once. *)
-  val join_map : (sym * sym * sym) list -> t -> t -> t
+  val join_map : ctx -> (sym * sym * sym) list -> t -> t -> t
 
   (** [widening map a b] overapproximates the abstraction [a] or the
       abstraction [b], guaranteeing stabilization..  The [map] is used to map
       symbols in [a] to symbols in [b] and the result *)
-  val widening_map : (sym * sym * sym) list -> t -> t -> t
+  val widening_map : ctx -> (sym * sym * sym) list -> t -> t -> t
 
   (** [meet map a b] overapproximates the abstraction [a] and the abstraction
       [b].  The [map] is used to map symbols in [a] to symbols in [b] and the
       result *)
-  val meet_map : (sym * sym * sym) list -> t -> t -> t
+  val meet_map : ctx -> (sym * sym * sym) list -> t -> t -> t
 
   (** [le map a b] determines if [a] is contained in [b] ([a] is less than or
       equal to [b]) under mapping [map]. *)
-  val le_map : (sym * sym) list -> t -> t -> bool
+  val le_map : ctx -> (sym * sym) list -> t -> t -> bool
 end
 
 (** [Sym] describes a modules for representing symbols.  Typical candidates

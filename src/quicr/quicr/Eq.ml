@@ -25,10 +25,7 @@ module Make
   module SSet = U.ESet
   module SMap = U.EMap
 
-  type ctx = {
-    ce: U.ctx;
-    cd: D.ctx;
-  }
+  type ctx = D.ctx
 
   type sym = D.sym
   type output = D.output
@@ -41,13 +38,13 @@ module Make
     e: U.t; (* equalities *)
   }
 
-  let check msg t =
-    let syms = List.fold_left (fun syms s -> SSet.add s syms) SSet.empty (D.symbols t.d) in
+  let check ctx msg t =
+    let syms = List.fold_left (fun syms s -> SSet.add s syms) SSet.empty (D.symbols ctx t.d) in
     let s_subset_of_syms = SSet.subset syms t.s in
     if not s_subset_of_syms then begin
       Format.printf "s not subet of syms: %s@." msg;
       Format.printf " s    = %a@." (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (SSet.elements t.s);
-      Format.printf " syms = %a@." (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (D.symbols t.d);
+      Format.printf " syms = %a@." (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (D.symbols ctx t.d);
     end;
     assert(s_subset_of_syms);
     assert(SSet.for_all (fun s ->
@@ -59,31 +56,23 @@ module Make
         sym_is_rep
       ) syms)
 
-  let init () = {
-    cd = D.init ();
-    ce = U.init ();
-  }
+  let init () = D.init ()
 
   let top ctx = {
-    d = D.top ctx.cd;
+    d = D.top ctx;
     s = SSet.empty;
-    e = U.empty ctx.ce;
+    e = U.empty;
   }
 
   let bottom ctx = {
-    d = D.bottom ctx.cd;
+    d = D.bottom ctx;
     s = SSet.empty;
-    e = U.empty ctx.ce;
+    e = U.empty;
   }
 
-  let context t = {
-    cd = D.context t.d;
-    ce = U.context t.e;
-  }
-
-  let symbols {d;e} =
+  let symbols ctx {d;e} =
     let els = U.fold (fun el _ els -> SSet.add el els) e SSet.empty in
-    let els = List.fold_left (fun els el -> SSet.add el els) els (D.symbols d) in
+    let els = List.fold_left (fun els el -> SSet.add el els) els (D.symbols ctx d) in
     U.ESet.elements els
 
   let serialize_eq t r =
@@ -100,8 +89,8 @@ module Make
           d
       ) t.e r
 
-  let serialize t =
-    let d = D.serialize t.d in
+  let serialize ctx t =
+    let d = D.serialize ctx t.d in
     serialize_eq t d
 
   let rec partition (eq,neq) = function
@@ -132,7 +121,7 @@ module Make
   let fold_pair_els f r l =
     List.fold_left (fun r (a,b) -> f (f r a) b) r l
 
-  let constrain cnstr {d;e;s} =
+  let constrain ctx cnstr {d;e;s} =
     (* partition the constraints *)
     let (eq,neq) = partition cnstr in
     (* save the original equalities *)
@@ -155,21 +144,21 @@ module Make
       ) [] eq in
     (* do a rename on d if necessary *)
     let d = if ren = [] then d else
-        D.rename_symbols (Rename.of_assoc_list ren) d in
+        D.rename_symbols ctx (Rename.of_assoc_list ren) d in
     (* constrain d with the non-equality constraints after they have had their symbols remapped *)
     let neq = remap_cnstr e cnstr in
-    let d = D.constrain neq d in
+    let d = D.constrain ctx neq d in
     (* recompute symbols of d *)
     let s = List.fold_left (fun s (r,_r') -> SSet.remove r s) s ren in
     let s = SSet.union s (symbols_cnstr neq) in
 
     let t = {d;e;s} in
-    if debug then check "constrain" t;
+    if debug then check ctx "constrain" t;
     t
       
 
 
-  let sat t cnstr =
+  let sat ctx t cnstr =
     (* partition the constraints *)
     let (eq,neq) = partition cnstr in
     let neq = remap_cnstr t.e neq in
@@ -184,15 +173,15 @@ module Make
       true
     else
       (* remaining equalities are sent to the underlying domain *)
-      D.sat t.d cnstr
+      D.sat ctx t.d cnstr
 
-  let is_bottom t =
-    D.is_bottom t.d
+  let is_bottom ctx t =
+    D.is_bottom ctx t.d
 
-  let is_top {d;e;_} =
-    U.is_empty e && D.is_top d
+  let is_top ctx {d;e;_} =
+    U.is_empty e && D.is_top ctx d
 
-  let le a b =
+  let le ctx a b =
     (* go through each equality in b.  If it is not in a.eq, add to a constraint *)
     let cnstr = U.fold (fun e1 _ cnstr ->
         let e2 = U.rep e1 b.e in
@@ -203,57 +192,57 @@ module Make
         else
           cnstr
       ) b.e L.True in
-    let bd = D.constrain cnstr b.d in
-    D.le a.d bd
+    let bd = D.constrain ctx cnstr b.d in
+    D.le ctx a.d bd
 
-  let upper_bound op a b =
+  let upper_bound op ctx a b =
     let e = U.split a.e b.e in
     let da = U.diff e a.e in
     let db = U.diff e b.e in
     let strengthen c (a,b) = L.And(c,L.Eq(L.Var a, L.Var b)) in
     let ca = List.fold_left strengthen L.True da in
     let cb = List.fold_left strengthen L.True db in
-    let doma = D.constrain ca a.d in
-    let domb = D.constrain cb b.d in
-    let d = op doma domb in
+    let doma = D.constrain ctx ca a.d in
+    let domb = D.constrain ctx cb b.d in
+    let d = op ctx doma domb in
     let s = a.s |>
             SSet.union b.s |>
             SSet.union (symbols_cnstr ca) |>
             SSet.union (symbols_cnstr cb)
     in
     let t = {d;e;s} in
-    if debug then check "upper bound" t;
+    if debug then check ctx "upper bound" t;
     t
 
 
 
-  let join a b =
-    upper_bound D.join a b
+  let join ctx a b =
+    upper_bound D.join ctx a b
 
-  let widening a b =
-    upper_bound D.widening a b
+  let widening ctx a b =
+    upper_bound D.widening ctx a b
 
-  let remap e d =
-    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+  let remap ctx e d =
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols ctx d) in
     let rename = Rename.of_iter_mem_get
         (fun f -> SSet.iter (fun sym -> f sym (U.rep sym e)) s)
         (fun sym -> SSet.mem sym s)
         (fun sym -> U.rep sym e) in
-    let d = D.rename_symbols rename d in
-    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+    let d = D.rename_symbols ctx rename d in
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols ctx d) in
     let t = {d;e;s} in
-    if debug then check "remap" t;
+    if debug then check ctx "remap" t;
     t
 
-  let meet a b =
+  let meet ctx a b =
     (*let cb = serialize b in*)
     (*constrain cb a*)
     let e = U.merge a.e b.e in
-    let d = D.meet a.d b.d in
+    let d = D.meet ctx a.d b.d in
     (* TODO: a better implementation that doesn't do a full remap *)
-    remap e d
+    remap ctx e d
 
-  let forget syms t =
+  let forget ctx syms t =
     let e,renames,syms = List.fold_left (fun (e,c,syms) s ->
         match U.remove s e with
         | e, U.NoRepresentative ->
@@ -272,16 +261,16 @@ module Make
           (e,c,syms)
       ) (t.e,Rename.empty,[]) syms in
     let d = t.d in
-    let d = if syms <> [] then D.forget syms d else d in
+    let d = if syms <> [] then D.forget ctx syms d else d in
     let d = if Rename.is_empty renames then d else
-        D.rename_symbols (Rename.of_composition renames) d in
+        D.rename_symbols ctx (Rename.of_composition renames) d in
     (* FIXME: do a better computation of symbols *)
-    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+    let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols ctx d) in
     let t = {e;d;s} in
-    if debug then check "forget" t;
+    if debug then check ctx "forget" t;
     t
 
-  let rename_symbols map t =
+  let rename_symbols ctx map t =
     let e = U.rename map t.e in
     let ren = Rename.fold (fun a a' ren ->
         let r = U.rep a t.e in
@@ -292,15 +281,15 @@ module Make
           ren
       ) map [] in
     let (d,s) = if ren = [] then (t.d,t.s) else 
-        let d = D.rename_symbols (Rename.of_assoc_list ren) t.d in
-        let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols d) in
+        let d = D.rename_symbols ctx (Rename.of_assoc_list ren) t.d in
+        let s = List.fold_left (fun s e -> SSet.add e s) SSet.empty (D.symbols ctx d) in
         (d,s)
     in
     let t = {d;s;e} in
-    if debug then check "rename_symbols" t;
+    if debug then check ctx "rename_symbols" t;
     t
 
-  let query t =
+  let query ctx t =
     {
       L.get_eqs = (fun () -> U.pairs t.e);
       L.get_eqs_sym = (fun s ->
@@ -312,23 +301,23 @@ module Make
         );
     }
 
-  let combine q t =
+  let combine ctx q t =
     let cnstr = List.fold_left (fun cnstr (a,b) -> L.And(cnstr,L.Eq(L.Var a,L.Var b))) L.True (q.L.get_eqs ()) in
-    constrain cnstr t
+    constrain ctx cnstr t
 
-  let pp_debug pp_sym ff t =
+  let pp_debug ctx pp_sym ff t =
     Format.fprintf ff "@[<v -7>";
     Format.fprintf ff "@[<hv 2>eqs:@ %a@]@," (L.pp pp_sym) (serialize_eq t L.True);
-    Format.fprintf ff "@[<h>dom:@ %a@]@," (D.pp_print pp_sym) t.d;
+    Format.fprintf ff "@[<h>dom:@ %a@]@," (D.pp_print ctx pp_sym) t.d;
     Format.fprintf ff "@[<h>sym:@ %a@]" (Format.pp_print_list ~pp_sep:Format.pp_print_space Format.pp_print_int) (SSet.elements t.s);
     Format.fprintf ff "@]"
 
-  let pp_print pp_sym ff t =
+  let pp_print ctx pp_sym ff t =
     begin match serialize_eq t L.True with
     | L.True -> ()
     | eqs ->
       Format.fprintf ff "%a ∧ " (L.pp pp_sym) eqs
     end;
-    D.pp_print pp_sym ff t.d
+    D.pp_print ctx pp_sym ff t.d
 end
 

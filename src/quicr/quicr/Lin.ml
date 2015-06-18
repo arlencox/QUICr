@@ -193,25 +193,22 @@ let debug_module = true
 
 (* Bottom element (empty context) *)
 let bottom (): t = None
-let is_bottom (x: t): bool = x = None
+let is_bottom () (x: t): bool = x = None
     
 (* Top element (empty context) *)
 let top (): t = Some { u_lin   = IntMap.empty;
                        u_sub   = IntMap.empty;
                        u_mem   = IntMap.empty;
                        u_eqs   = IntMap.empty }
-let is_top (x: t): bool =
+let is_top () (x: t): bool =
   match x with
   | None -> false
   | Some u ->
       u.u_lin = IntMap.empty && u.u_sub = IntMap.empty
         && u.u_sub = IntMap.empty && u.u_eqs = IntMap.empty
 
-(* Context management *)
-let context (x: t) = ( )
-
 (* Symbols that are constrained (only those that explicitely appear) *)
-let symbols (x: t): sym list =
+let symbols () (x: t): sym list =
   match x with
   | None -> [ ]
   | Some u ->
@@ -317,8 +314,8 @@ let pp
             (pp_set_syms ", " pp_sym) s
         ) u.u_mem
 
-let pp_debug = pp
-let pp_print = pp
+let pp_debug () = pp
+let pp_print () = pp
 let pp_sym ch i = Format.fprintf ch "S[%d]" i
 
 
@@ -398,7 +395,7 @@ let u_constrain c (u: u): u =
         | None ->
             Format.printf
               "\nWARN,guard: linearization failed: S[%d] = %s\n%a\n"
-              i (e_2str e) (pp_debug pp_sym) (Some u);
+              i (e_2str e) (pp_debug () pp_sym) (Some u);
             u
       end
   | L.SubEq (L.Var i, L.Var j) ->
@@ -406,9 +403,9 @@ let u_constrain c (u: u): u =
   | _ ->
       (* otherwise, we just drop the constraint *)
       Format.printf "\nWARN,guard: %s\n%a\n"
-        (t_2str c) (pp_debug pp_sym) (Some u);
+        (t_2str c) (pp_debug () pp_sym) (Some u);
       u
-let constrain (c: cnstr): t -> t = lift (u_constrain c)
+let constrain () (c: cnstr): t -> t = lift (u_constrain c)
 
 
 (* Helper functions to check basic constraints *)
@@ -511,7 +508,7 @@ let u_sat_lin (u: u) i sl =
     else false
 
 (* Sat operator, checks whether a constraint is implied by an abstract state *)
-let sat (x: t) (c: cnstr): bool =
+let sat () (x: t) (c: cnstr): bool =
   let r =
     match x with
     | None -> true (* any constraint valid under _|_ *)
@@ -534,7 +531,7 @@ let sat (x: t) (c: cnstr): bool =
   (* debugging results *)
   if debug_module then
     Format.printf "\nSat called, returned %b: %s\n%a\n" r (t_2str c)
-      (pp_debug pp_sym) x;
+      (pp_debug () pp_sym) x;
   r
 
 (* Serialization, with a function to lists, also used in meet *)
@@ -560,7 +557,7 @@ let serialize_2list (u: u): sym L.t list =
   @ aux (fun i j -> L.In (j, L.Var i)) u.u_mem
   @ aux (fun i j -> L.SubEq (L.Var j, L.Var i)) u.u_sub
   @ l
-let serialize: t -> output = function
+let serialize () : t -> output = function
   | None -> L.False
   | Some u ->
       match serialize_2list u with
@@ -733,7 +730,7 @@ let u_drop_syms (fv: int -> bool) (u: u): u =
     u_eqs = eqs }
 
 (* Removal of all the constraints on a set of symbols *)
-let forget (l: sym list): t -> t =
+let forget () (l: sym list): t -> t =
   let u_forget (u: u): u =
     let svset = List.fold_left (fun a i -> IntSet.add i a) IntSet.empty l in
     (* do some reduction *)
@@ -745,7 +742,7 @@ let forget (l: sym list): t -> t =
 (* Renaming *)
 (* Nb: this function is a lot simpler than the MemCAD one, since it does not
  *     also have to manage duplication and removal of symbols *)
-let rename_symbols (r: sym R.t): t -> t =
+let rename_symbols () (r: sym R.t): t -> t =
   let u_rename (u: u): u =
     let do_sym (i: int): int =
       try R.get r i
@@ -771,7 +768,7 @@ let rename_symbols (r: sym R.t): t -> t =
 (** Lattice binary operations *)
 
 (* Join returns an abstract over-approx of the lub *)
-let join (x0: t) (x1: t): t =
+let join () (x0: t) (x1: t): t =
   let u_lub (u0: u) (u1: u): u =
     (* A useful generalization:
      *   (S0 = S1 /\ S2 = empty) \/ (S0 = {x} + S1 /\ S2 = {x})
@@ -887,10 +884,10 @@ let join (x0: t) (x1: t): t =
   | Some u0, Some u1 -> Some (u_lub u0 u1)
 
 (* Join also acts as a widening *)
-let widening: t -> t -> t = join
+let widening: ctx -> t -> t -> t = join
 
 (* Intersection *)
-let meet (x0: t) (x1: t): t =
+let meet () (x0: t) (x1: t): t =
   match x0, x1 with
   | None, _ | _, None -> None
   | Some u0, Some u1 ->
@@ -898,7 +895,7 @@ let meet (x0: t) (x1: t): t =
       Some (List.fold_left (fun u c -> u_constrain c u) u0 l1)
 
 (* Inclusion checking *)
-let le (x0: t) (x1: t): bool =
+let le () (x0: t) (x1: t): bool =
   let module M = struct exception Abort end in
   (* are all constraints of u1 true in u0 ? *)
   let u_is_le (u0: u) (u1: u): bool =
@@ -934,7 +931,7 @@ let le (x0: t) (x1: t): bool =
 (* For now, the reduction primitives simply export equalities;
  * but do not try to do additional internal reduction, to generate
  * more equalities (we may do it later). *)
-let query (x: t): query =
+let query () (x: t): query =
   match x with
   | None ->
       { L.get_eqs     = (fun ( ) -> [ ]);
@@ -947,6 +944,7 @@ let query (x: t): query =
         with Not_found -> [ ] in
       { L.get_eqs     = eqs;
         L.get_eqs_sym = eqs_of; }
-let combine (q: query) (x: t) =
-  List.fold_left (fun x (s0, s1) -> constrain (L.Eq (L.Var s0, L.Var s1)) x)
+
+let combine () (q: query) (x: t) =
+  List.fold_left (fun x (s0, s1) -> constrain () (L.Eq (L.Var s0, L.Var s1)) x)
     x (q.L.get_eqs ( ))

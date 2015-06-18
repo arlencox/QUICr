@@ -1,7 +1,4 @@
 module type UnionFind = sig
-  (** [ctx] is context for this union find structure *)
-  type ctx
-
   (** [t] is a set<r> data structure *)
   type t
 
@@ -11,17 +8,12 @@ module type UnionFind = sig
   module ESet : Set.S with type elt = elt
   module EMap : Map.S with type key = elt
 
-  val init : unit -> ctx
-
   (** [empty] returns the empty set of sets *)
-  val empty : ctx -> t
+  val empty : t
 
   (** [is_empty] returns true if this is an empty mapping (either empty or only
       singleton sets *)
   val is_empty : t -> bool
-
-  (** [context t] retrieves the context used in the construction of this [t] *)
-  val context : t -> ctx
 
   type rem =
     | NoRepresentative

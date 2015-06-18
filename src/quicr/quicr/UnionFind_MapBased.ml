@@ -12,8 +12,6 @@ module Make(C: Comparable)
   module EMap = Map.Make(C)
   module ESet = Set.Make(C)
 
-  type ctx = unit
-
   type elt = C.t
 
   type t = {
@@ -21,7 +19,7 @@ module Make(C: Comparable)
     r2e: ESet.t EMap.t;
   }
 
-  let empty () = {
+  let empty = {
     e2r = EMap.empty;
     r2e = EMap.empty;
   }
@@ -29,10 +27,6 @@ module Make(C: Comparable)
   let is_empty t =
     EMap.is_empty t.e2r ||
     EMap.for_all (fun e r -> C.compare e r = 0) t.e2r
-
-  let init () = ()
-
-  let context t = ()
 
   let mem e t =
     EMap.mem e t.e2r
@@ -129,7 +123,7 @@ module Make(C: Comparable)
 
   let split t1 t2 =
     let h = Hashtbl.create 8191 in
-    let res = ref (empty ()) in
+    let res = ref empty in
     ignore(EMap.merge (fun e r1 r2 ->
         let r1 = match r1 with Some r1 -> r1 | None -> e in
         let r2 = match r2 with Some r2 -> r2 | None -> e in
@@ -158,7 +152,7 @@ module Make(C: Comparable)
         let e = Rename.get rename e in
         let r = Rename.get rename r in
         union e r t
-      ) t (empty ())
+      ) t empty
 
   let pairs t =
     EMap.bindings t.e2r

@@ -78,10 +78,7 @@ module Make(D: Interface.Domain
     Format.fprintf ff "@,combine: %a" pp_stat ctx.combine
 
 
-  type t = {
-    d: D.t;
-    c: ctx;
-  }
+  type t = D.t
 
   type sym = int
 
@@ -113,69 +110,58 @@ module Make(D: Interface.Domain
 
 
   let top ctx = 
-    {
-      d = stat ctx.top (lazy (D.top ctx.ctx));
-      c = ctx;
-    }
+    stat ctx.top (lazy (D.top ctx.ctx))
 
   let bottom ctx = 
-    {
-      d = stat ctx.bottom (lazy (D.bottom ctx.ctx));
-      c = ctx;
-    }
+    stat ctx.bottom (lazy (D.bottom ctx.ctx))
 
-  let context d = d.c
+  let symbols ctx d =
+    stat ctx.symbols (lazy (D.symbols ctx.ctx d))
 
-  let symbols {d;c} =
-    stat c.symbols (lazy (D.symbols d))
+  let constrain ctx cnstr d =
+    stat ctx.constrain (lazy (D.constrain ctx.ctx cnstr d))
 
-  let constrain cnstr {d;c} =
-    {c;d = stat c.constrain (lazy (D.constrain cnstr d))}
+  let serialize ctx d =
+    stat ctx.serialize (lazy (D.serialize ctx.ctx d))
 
-  let serialize {d;c} =
-    stat c.serialize (lazy (D.serialize d))
+  let sat ctx d cnstr =
+    stat ctx.sat (lazy (D.sat ctx.ctx d cnstr))
 
-  let sat {d;c} cnstr =
-    stat c.sat (lazy (D.sat d cnstr))
+  let join ctx a b =
+    stat ctx.join (lazy (D.join ctx.ctx a b))
 
-  let join a b =
-    {a with
-     d= stat a.c.join (lazy (D.join a.d b.d))}
+  let widening ctx a b =
+    stat ctx.widening (lazy (D.widening ctx.ctx a b))
 
-  let widening a b =
-    {a with
-     d= stat a.c.widening (lazy (D.widening a.d b.d))}
+  let meet ctx a b =
+    stat ctx.meet (lazy (D.meet ctx.ctx a b))
 
-  let meet a b =
-    {a with
-     d= stat a.c.meet (lazy (D.meet a.d b.d))}
+  let le ctx a b =
+     stat ctx.le (lazy (D.le ctx.ctx a b))
 
-  let le a b =
-     stat a.c.le (lazy (D.le a.d b.d))
+  let is_bottom ctx d =
+    stat ctx.is_bottom (lazy (D.is_bottom ctx.ctx d))
 
-  let is_bottom {d;c} =
-    stat c.is_bottom (lazy (D.is_bottom d))
+  let is_top ctx d =
+    stat ctx.is_top (lazy (D.is_top ctx.ctx d))
 
-  let is_top {d;c} =
-    stat c.is_top (lazy (D.is_top d))
+  let forget ctx syms d =
+    stat ctx.forget (lazy (D.forget ctx.ctx syms d))
 
-  let forget syms {d;c} =
-    {c;d= stat c.forget (lazy (D.forget syms d))}
+  let rename_symbols ctx map d =
+    stat ctx.rename_symbols (lazy (D.rename_symbols ctx.ctx map d))
 
-  let rename_symbols map {d;c} =
-    {c;d= stat c.rename_symbols (lazy (D.rename_symbols map d))}
+  let query ctx d =
+    stat ctx.query (lazy (D.query ctx.ctx d))
 
-  let query {d;c} =
-    stat c.query (lazy (D.query d))
+  let combine ctx q d =
+    stat ctx.combine (lazy (D.combine ctx.ctx q d))
 
-  let combine q {d;c} =
-    {c;d= stat c.combine (lazy (D.combine q d))}
-
-  let pp_print pp_sym ff t =
-    Format.fprintf ff "@[<v 0>%a" (D.pp_print pp_sym) t.d;
-    pp_stats ff t.c;
+  let pp_print ctx pp_sym ff t =
+    Format.fprintf ff "@[<v 0>%a" (D.pp_print ctx.ctx pp_sym) t;
+    pp_stats ff ctx;
     Format.fprintf ff "@]"
 
-  let pp_debug pp_sym ff t =
-    pp_print pp_sym ff t
+  let pp_debug ctx pp_sym ff t =
+    pp_print ctx pp_sym ff t
 end

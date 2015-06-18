@@ -46,9 +46,7 @@ module Make(D: Interface.Domain
     s = SS.empty;
   }
 
-  let context t = D.context t.d
-
-  let symbols t = D.symbols t.d
+  let symbols ctx t = D.symbols ctx t.d
 
   let rec rewrite_e = function
     | L.Empty -> (L.Empty, SS.empty)
@@ -112,14 +110,14 @@ module Make(D: Interface.Domain
 
   let rewrite = rewrite true
 
-  let constrain c {d;s} =
+  let constrain ctx c {d;s} =
     let (c,ci) = rewrite c in
-    let d = D.constrain c d in
+    let d = D.constrain ctx c d in
     let s = SS.union s ci in
     {d;s}
 
-  let serialize {d;s} =
-    let o = D.serialize d in
+  let serialize ctx {d;s} =
+    let o = D.serialize ctx d in
     L.map_sym (fun is_sing id ->
         if is_sing || SS.mem id s then
           L.Sing id
@@ -127,54 +125,54 @@ module Make(D: Interface.Domain
           L.Var id
       ) o
 
-  let sat a c =
+  let sat ctx a c =
     let (c,_ci) = rewrite c in
-    D.sat a.d c
+    D.sat ctx a.d c
 
-  let join a b =
+  let join ctx a b =
     {
-      d = D.join a.d b.d;
+      d = D.join ctx a.d b.d;
       s = SS.union a.s b.s;
     }
 
-  let widening a b =
+  let widening ctx a b =
     {
-      d = D.widening a.d b.d;
+      d = D.widening ctx a.d b.d;
       s = SS.union a.s b.s;
     }
 
-  let meet a b =
+  let meet ctx a b =
     {
-      d = D.meet a.d b.d;
+      d = D.meet ctx a.d b.d;
       s = SS.union a.s b.s;
     }
 
-  let le a b =
-    D.le a.d b.d
+  let le ctx a b =
+    D.le ctx a.d b.d
 
-  let is_bottom a =
-    D.is_bottom a.d
+  let is_bottom ctx a =
+    D.is_bottom ctx a.d
 
-  let is_top a =
-    D.is_top a.d
+  let is_top ctx a =
+    D.is_top ctx a.d
 
-  let forget syms a = 
+  let forget ctx syms a = 
     {
-      d = D.forget syms a.d;
+      d = D.forget ctx syms a.d;
       s = List.fold_left (fun s e -> SS.remove e s) a.s syms;
     }
 
-  let rename_symbols rename a =
+  let rename_symbols ctx rename a =
     {
-      d = D.rename_symbols rename a.d;
+      d = D.rename_symbols ctx rename a.d;
       s = SS.fold (fun e s -> SS.add (Rename.get rename e) s) a.s SS.empty;
     }
 
-  let query a =
-    D.query a.d
+  let query ctx a =
+    D.query ctx a.d
 
-  let combine q a = 
-    {a with d = D.combine q a.d}
+  let combine ctx q a = 
+    {a with d = D.combine ctx q a.d}
 
   let pp_sym pp_sym t ff s =
     if SS.mem s t.s then
@@ -182,11 +180,11 @@ module Make(D: Interface.Domain
     else
       pp_sym ff s
 
-  let pp_print pp ff t =
-    D.pp_print (pp_sym pp t) ff t.d
+  let pp_print ctx pp ff t =
+    D.pp_print ctx (pp_sym pp t) ff t.d
 
-  let pp_debug pp ff t =
-    D.pp_print (pp_sym pp t) ff t.d
+  let pp_debug ctx pp ff t =
+    D.pp_print ctx (pp_sym pp t) ff t.d
 
 
 end
