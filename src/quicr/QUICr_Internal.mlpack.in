@@ -1,6 +1,11 @@
+#ifdef PKG_MLBDD
 quicr/BDDFull
+#endif
 quicr/BDDLibX
 quicr/BDDXFull
+#ifdef PKG_CUDD
+quicr/BDDCudd
+#endif
 quicr/DS
 quicr/Debugger
 quicr/DomainBuilder
@@ -15,7 +20,9 @@ quicr/Parser
 quicr/QUICG
 quicr/QUICGLib
 quicr/Rename
+#ifdef PKG_Z3
 quicr/SMT
+#endif
 quicr/Select
 quicr/Sing
 quicr/Stats

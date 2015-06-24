@@ -1,0 +1,7 @@
+let x1 = top
+
+let x2 = constrain 223 = 275 ∧ 226 = 274 ∧ 274 ⊆ ∅ ∧ 275 ⊆ ∅ x1
+
+let x3 = constrain 226 ⊆ 223 x1
+
+le x2 x3

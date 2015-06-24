@@ -1,0 +1,17 @@
+let x1 = top
+let x2 = constrain 0 = 1 x1
+let x3 = constrain 2 = 3 x2
+let x4 = constrain 4 = 5 x3
+
+let x5 = constrain 1 <= 2 x4
+let x6 = constrain 2 <= 1 x5
+let x7 = constrain 3 = 5 x6
+
+let x8 = constrain 1 = 2 x4
+let x9 = constrain 3 <= 5 x8
+let x10 = constrain 5 <= 3 x9
+
+le x7 x8
+le x10 x5
+//le x7 x8
+//le x10 x7

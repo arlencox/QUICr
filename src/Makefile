@@ -1,12 +1,13 @@
 .PHONY: all clean benchmark
 
-PP_FLAGS=$(shell ./check_deps Z3 4.4.0.0 mlbdd 0.5)
+PP_FLAGS=$(shell ./check_deps Z3 4.4.0.0 mlbdd 0.5 cudd 2.2.0)
 
 FLAGS=-j 0 -cflag -short-paths -pp "cppo $(PP_FLAGS)"
 
-all: _tags quicr/QUICr.mllib
+all: _tags quicr/QUICr.mllib quicr/QUICr_Internal.mlpack
 	ocamlbuild -use-ocamlfind $(FLAGS) -I quicr -I main quicr/QUICr.cma quicr/QUICr.cmxa main/Main.d.byte main/Main.native
 	rm _tags
+	rm quicr/QUICr_Internal.mlpack
 	rm quicr/QUICr.mllib
 
 %:%.in

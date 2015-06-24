@@ -32,6 +32,17 @@ let build_domain name args =
   | "bdd-opt", _ ->
     raise (Build_error "BDD-based domains were disabled at compile time")
 #endif
+#ifdef PKG_CUDD
+  | "bdd-cudd", [] ->
+    SetDomain (module BDDCudd.Make(struct let reorder = None end))
+  | "bdd-cudd", [String s] ->
+    SetDomain (module BDDCudd.Make(struct let reorder = (Some s) end))
+  | "bdd-cudd", _ ->
+    raise (Build_error "bdd-full domain does not accept any arguments")
+#else
+  | "bdd-cudd", _ ->
+    raise (Build_error "CUDD-based domains were disabled at compile time")
+#endif
   | "bdd-x-full", [] ->
     SetDomain (module BDDXFull)
   | "bdd-x-full", _ ->
@@ -146,6 +157,13 @@ let help_string =
   d ::= lin                  - A linear abstraction for disjoint unions
       | bdd-full             - A BDD-based abstraction for sets
       | bdd-opt              - A pre-built optimized combination of domains
+      | bdd-x-full           - An abstraction based on Xavier Leroy's BDD
+                               implementation
+      | bdd-cudd [<'order'>] - A high-performance implementation based the C-
+                               native BDD library Cudd by Fabio Somenzi. 
+                               Optional ordering enables dynamic, on-demand
+                               reordering using the specified ordering.
+                               Orderings are from CUDD.
       | smt                  - An SMT-based abstraction for sets
       | quic                 - A QUIC-graphs-based abstraction for sets
       | qbf [ <'solver'> ]   - A QBF-based abstraction for sets.

@@ -190,9 +190,7 @@ let rename_symbol ctx a b t =
   let vars = t.vars |>
              ISet.remove a |>
              ISet.add b in
-  {t with
-   vars;
-   d = D.rename_set ctx t.d a b}
+  { vars; d = D.rename_set ctx t.d a b }
 
 let rename_symbols ctx rename t =
   let counter = ref (ISet.max_elt t.vars) in

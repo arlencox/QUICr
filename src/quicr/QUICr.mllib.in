@@ -23,3 +23,6 @@ QBF
 SMT
 QUICG
 #endif
+#ifdef PKG_CUDD
+BDDCudd
+#endif

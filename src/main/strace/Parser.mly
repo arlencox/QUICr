@@ -7,6 +7,7 @@
 %token RSQUARE
 %token ARROW
 %token SEMI
+%token EMPTY
 
 %token DIFF
 %token UNION
@@ -99,6 +100,7 @@ cond
 expr
   : INT { L.Var $1 }
   | LCURLY RCURLY { L.Empty }
+  | EMPTY { L.Empty }
   | LCURLY INT RCURLY { L.Sing $2 }
   | expr UNION expr { L.Union ($1,$3) }
   | expr DISJUNION expr { L.DisjUnion ($1,$3) }

@@ -162,8 +162,6 @@ let is_bottom ctx t = B.is_false t
 
 let is_top ctx t = B.is_true t
 
-
-
 let rename_symbols ctx rename t =
   B.permutef ctx (Rename.get rename) t
 

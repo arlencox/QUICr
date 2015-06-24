@@ -6,6 +6,11 @@
 
 <quicr/quicr/Stats.*>: package(unix)
 
+#ifdef PKG_CUDD
+<quicr/quicr/BDDCudd.*> : package(cudd)
+<main/Main.*> : package(cudd)
+#endif
+
 #ifdef PKG_MLBDD
 <quicr/quicr/BDDFull.*> : package(mlbdd)
 <main/Main.*> : package(mlbdd)

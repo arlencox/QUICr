@@ -15,6 +15,7 @@ rule token = parse
   | "\n" { incr_linenum lexbuf; token lexbuf }
   | "{" { LCURLY }
   | "}" { RCURLY }
+  | "∅" { EMPTY }
   | "(" { LPAREN }
   | ")" { RPAREN }
   | "[" { LSQUARE }
@@ -36,13 +37,17 @@ rule token = parse
   | "is_top" { IS_TOP }
   | "\\" { DIFF }
   | "U" { UNION }
+  | "∪" { UNION }
   | "U+" { DISJUNION }
   | "^" { INTER }
+  | "∩" { INTER }
   | "<=" { SUBSET }
+  | "⊆" { SUBSET }
   | "=" { EQUAL }
   | "~" { SQUIGGLE }
   | "in" { IN }
   | "/\\" { AND }
+  | "∧" { AND }
   | "true" { TRUE }
   | "false" { FALSE }
   | "not" { NOT }

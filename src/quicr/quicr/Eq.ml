@@ -181,7 +181,22 @@ module Make
   let is_top ctx {d;e;_} =
     U.is_empty e && D.is_top ctx d
 
+  (*let le ctx a b =
+    let ac = U.fold (fun e r cnstr ->
+        L.And(cnstr, L.Eq(L.Var e, L.Var r))
+      ) a.e L.True in
+    let bc = U.fold (fun e r cnstr ->
+        L.And(cnstr, L.Eq(L.Var e, L.Var r))
+      ) b.e L.True in
+    let a = D.constrain ctx ac a.d in
+    let b = D.constrain ctx bc b.d in
+    D.le ctx a b*)
+
   let le ctx a b =
+    if debug then begin
+      check ctx "le a failed" a;
+      check ctx "le b failed" b
+    end;
     (* go through each equality in b.  If it is not in a.eq, add to a constraint *)
     let cnstr = U.fold (fun e1 _ cnstr ->
         let e2 = U.rep e1 b.e in
@@ -193,6 +208,20 @@ module Make
           cnstr
       ) b.e L.True in
     let bd = D.constrain ctx cnstr b.d in
+    let iter f =
+      U.fold (fun e r () ->
+          f e r
+        ) a.e ()
+    in
+    let mem e =
+      U.mem e a.e
+    in
+    let get e =
+      U.rep e a.e
+    in
+    let rn = Rename.of_iter_mem_get iter mem get in
+    let bd = D.rename_symbols ctx rn bd in
+               
     D.le ctx a.d bd
 
   let upper_bound op ctx a b =

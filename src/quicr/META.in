@@ -4,9 +4,12 @@
 #ifdef PKG_Z3
 #define DEP_Z3 Z3
 #endif
+#ifdef PKG_CUDD
+#define DEP_CUDD cudd
+#endif
 name="quicr"
 description="Abstract domain library for sets"
 version="0.1"
-requires=STRINGIFY(DEP_BDD DEP_Z3 unix)
+requires=STRINGIFY(DEP_BDD DEP_Z3 DEP_CUDD unix)
 archive(byte)="QUICr.cma"
 archive(native)="QUICr.cmxa"
