@@ -139,6 +139,11 @@ let build_domain name args =
   | "sing", _ ->
     raise (Build_error "sing takes a set domain as an argument")
 
+  | "remap", [SetDomain d] ->
+    SetDomain (module Remap.Make((val d)))
+  | "remap", _ ->
+    raise (Build_error "remap takes a set domain as an argument")
+
   | "stats", [SetDomain d] ->
     SetDomain (module Stats.Make((val d)))
   | "stats", _ ->
@@ -182,7 +187,8 @@ let help_string =
                                constrainquery.  Optional file name for trace
                                defaults to trace.strace.
       | sing<d>              - Syntactic handling of singleton sets.
-      | stat<d>              - Collect domain statistics"
+      | stat<d>              - Collect domain statistics
+      | remap<d>             - Remap symbols onto smallest natural numbers"
 
 let get_help () =
   Format.printf "%s@." help_string;

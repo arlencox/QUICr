@@ -20,6 +20,7 @@ quicr/Parser
 quicr/QUICG
 quicr/QUICGLib
 quicr/Rename
+quicr/Remap
 #ifdef PKG_Z3
 quicr/SMT
 #endif

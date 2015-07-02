@@ -55,7 +55,7 @@ struct
 
 
   let is_bottom ctx (s,ns) =
-    failwith "Unimplemented"
+    false
 
   (*let do_reduction_cnstr ctx pos t tn cnstr =
     let t' = G.copy_atoms ctx t in
